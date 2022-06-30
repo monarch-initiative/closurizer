@@ -3,6 +3,7 @@ from typing import List
 import petl as etl
 import sqlite3
 import os
+import tarfile
 
 
 def _string_agg(key, rows):
@@ -11,9 +12,23 @@ def _string_agg(key, rows):
 
 def add_closure(node_file: str,
                 edge_file: str,
+                kg_archive: str,
                 closure_file: str,
+                path: str,
                 fields: List[str],
                 output_file: str):
+
+    print("Generating closure KG...")
+    print(f"node_file: {node_file}")
+    print(f"edge_file: {edge_file}")
+    print(f"kg_archive: {kg_archive}")
+    print(f"closure_file: {closure_file}")
+    print(f"fields: {','.join(fields)}")
+    print(f"output_file: {output_file}")
+
+    tar = tarfile.open(f"{path}/{kg_archive}")
+    tar.extract(node_file)
+    tar.extract(edge_file)
 
     db = "closurizer.db"
 
@@ -79,8 +94,14 @@ def add_closure(node_file: str,
         where edges.{field} = closure_label.id;
         """)
 
-    etl.fromdb(sqlite, 'select * from edges').totsv(output_file)
+    etl.fromdb(sqlite, 'select * from edges').totsv(f"{path}/{output_file}")
 
     # Clean up the database
     if os.path.exists(db):
         os.remove(db)
+
+    # Clean up extracted node & edge files
+    if os.path.exists(f"{path}/{node_file}"):
+        os.remove(f"{path}/{node_file}")
+    if os.path.exists(f"{path}/{edge_file}"):
+        os.remove(f"{path}/{edge_file}")
