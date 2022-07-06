@@ -42,6 +42,8 @@ def add_closure(node_file: str,
     edges = etl.fromtsv(edge_file)
 
     for field in fields:
+        edges = etl.addfield(edges, f"{field}_namespace")
+        edges = etl.addfield(edges, f"{field}_category")
         edges = etl.addfield(edges, f"{field}_closure")
         edges = etl.addfield(edges, f"{field}_label")
         edges = etl.addfield(edges, f"{field}_closure_label")
@@ -73,6 +75,21 @@ def add_closure(node_file: str,
         etl.leftjoin(edges, closure_id_table, lkey=f"{field}", rkey="id")
 
     for field in fields:
+
+        cur.execute(f"""
+        update edges 
+        set {field}_namespace = SUBSTR(nodes.id,1,INSTR(nodes.id,':') -1)
+        from nodes
+        where edges.{field} = nodes.id;
+        """)
+
+        cur.execute(f"""
+        update edges 
+        set {field}_category = nodes.category
+        from nodes
+        where edges.{field} = nodes.id;
+        """)
+
         cur.execute(f"""
         update edges
         set {field}_closure = ancestors 
