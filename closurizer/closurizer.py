@@ -27,8 +27,8 @@ def add_closure(node_file: str,
     print(f"output_file: {output_file}")
 
     tar = tarfile.open(f"{path}/{kg_archive}")
-    tar.extract(node_file)
-    tar.extract(edge_file)
+    tar.extract(node_file, path=path)
+    tar.extract(edge_file, path=path)
 
     db = "closurizer.db"
 
