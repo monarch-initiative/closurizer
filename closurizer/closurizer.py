@@ -30,6 +30,10 @@ def add_closure(node_file: str,
     tar.extract(node_file, path=path)
     tar.extract(edge_file, path=path)
 
+    # add paths, so that steps below can find the file
+    node_file = f"{path}/{node_file}"
+    edge_file = f"{path}/{edge_file}"
+
     db = "closurizer.db"
 
     if os.path.exists(db):
