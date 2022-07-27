@@ -4,7 +4,7 @@ import petl as etl
 import sqlite3
 import os
 import tarfile
-
+from os.path import exists
 
 def _string_agg(key, rows):
     return [key, "|".join(row[1] for row in rows)]
@@ -34,7 +34,10 @@ def add_closure(node_file: str,
     node_file = f"{path}/{node_file}"
     edge_file = f"{path}/{edge_file}"
 
-    db = "closurizer.db"
+    assert(exists(node_file))
+    assert(exists(edge_file))
+
+    db = f"{path}/closurizer.db"
 
     if os.path.exists(db):
         os.remove(db)
@@ -122,7 +125,7 @@ def add_closure(node_file: str,
         os.remove(db)
 
     # Clean up extracted node & edge files
-    if os.path.exists(f"{path}/{node_file}"):
-        os.remove(f"{path}/{node_file}")
-    if os.path.exists(f"{path}/{edge_file}"):
-        os.remove(f"{path}/{edge_file}")
+    if os.path.exists(f"{node_file}"):
+        os.remove(f"{node_file}")
+    if os.path.exists(f"{edge_file}"):
+        os.remove(f"{edge_file}")
