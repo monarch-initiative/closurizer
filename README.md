@@ -1,4 +1,4 @@
-# closurizer
+# Monarch Closurizer
 Closurizer adds expansion fields to kgx files following the Golr pattern
 
 ### Given a KG with
