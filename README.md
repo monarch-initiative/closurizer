@@ -29,3 +29,17 @@ and a Relation Graph closure tsv file with:
 MONDO:0007739|rdfs:subClassOf|MONDO:0000167|
 MONDO:0007739|rdfs:subClassOf|MONDO:0005395|
 
+## Usage
+
+As a module
+```
+from closurizer.closurizer import add_closure
+
+add_closure(node_file=f"my-kg_nodes.tsv",
+            edge_file=f"my-kg_edges.tsv",
+            kg_archive=f"my-kg.tar.gz",
+            closure_file="my-relations-non-redundant.tsv",
+            path="output/",
+            output_file=f"my-kg-denornalized_edges.tsv",
+            fields=["subject", "object"])
+```
