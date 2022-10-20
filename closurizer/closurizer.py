@@ -16,32 +16,35 @@ def _cut_left_join(ltable, rtable, field, attribute):
                         rkey="id")
 
 
-def add_closure(node_file: str,
-                edge_file: str,
-                kg_archive: str,
+def add_closure(kg_archive: str,
                 closure_file: str,
-                path: str,
-                fields: List[str],
-                output_file: str):
+                output_file: str,
+                fields: List[str] = None
+                ):
     print("Generating closure KG...")
-    print(f"node_file: {node_file}")
-    print(f"edge_file: {edge_file}")
     print(f"kg_archive: {kg_archive}")
     print(f"closure_file: {closure_file}")
+
+    if fields is None or len(fields) == 0:
+        fields = ['subject', 'object']
+
     print(f"fields: {','.join(fields)}")
     print(f"output_file: {output_file}")
 
-    tar = tarfile.open(f"{path}/{kg_archive}")
-    tar.extract(node_file, path=path)
-    tar.extract(edge_file, path=path)
+    tar = tarfile.open(f"{kg_archive}")
 
-    # add paths, so that steps below can find the file
-    node_file = f"{path}/{node_file}"
-    edge_file = f"{path}/{edge_file}"
-
+    print("Loading node table...")
+    node_file_name = [member.name for member in tar.getmembers() if member.name.endswith('_nodes.tsv') ][0]
+    tar.extract(node_file_name,)
+    node_file = f"{node_file_name}"
+    print(f"node_file: {node_file}")
     nodes = etl.fromtsv(node_file)
     nodes = etl.addfield(nodes, 'namespace', lambda rec: rec['id'][:rec['id'].index(":")])
 
+    edge_file_name = [member.name for member in tar.getmembers() if member.name.endswith('_edges.tsv') ][0]
+    tar.extract(edge_file_name)
+    edge_file = f"{edge_file_name}"
+    print(f"edge_file: {edge_file}")
     edges = etl.fromtsv(edge_file)
 
     # Load the relation graph tsv in long format mapping a node to each of it's ancestors
@@ -50,15 +53,12 @@ def add_closure(node_file: str,
                      .setheader(['id', 'predicate', 'ancestor'])
                      .cutout('predicate')  # assume all predicates for now
                      )
-    print("closure table")
-    print(etl.head(closure_table))
+
     # Prepare the closure id table, mapping node IDs to pipe separated lists of ancestors
     closure_id_table = (etl.rowreduce(closure_table, key='id',
                                       reducer=_string_agg,
                                       header=['id', 'ancestors'])
                         .rename('ancestors', 'closure'))
-    print("closure_id_table")
-    print(etl.head(closure_id_table))
 
     # Prepare the closure label table, mapping node IDs to pipe separated lists of ancestor names
     closure_label_table = (etl.leftjoin(closure_table,
@@ -70,8 +70,6 @@ def add_closure(node_file: str,
                            .selectnotnone("closure_label")
                            .rowreduce(key='id', reducer=_string_agg, header=['id', 'ancestor_labels'])
                            .rename('ancestor_labels', 'closure_label'))
-    print("closure_label_table")
-    print(etl.head(closure_label_table))
 
     for field in fields:
         edges = _cut_left_join(edges, nodes, field, "namespace")
@@ -81,13 +79,11 @@ def add_closure(node_file: str,
         edges = etl.leftjoin(edges, (etl.cut(nodes, ["id", "name"]).rename("name", f"{field}_label")), lkey=field,
                              rkey="id")
 
-    print("edges table")
-    print(etl.head(edges))
-
-    etl.totsv(edges, f"{path}/{output_file}")
+    print("Denormalizing...")
+    etl.totsv(edges, f"{output_file}")
 
     # Clean up extracted node & edge files
-    if os.path.exists(f"{path}/{node_file}"):
-        os.remove(f"{path}/{node_file}")
-    if os.path.exists(f"{path}/{edge_file}"):
-        os.remove(f"{path}/{edge_file}")
+    if os.path.exists(f"{node_file}"):
+        os.remove(f"{node_file}")
+    if os.path.exists(f"{edge_file}"):
+        os.remove(f"{edge_file}")
