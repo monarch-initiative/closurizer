@@ -73,6 +73,9 @@ def add_closure(node_file: str,
     print("closure_label_table")
     print(etl.head(closure_label_table))
 
+    # add taxon label to nodes
+    nodes = _cut_left_join(nodes, nodes, "in_taxon", "label")
+
     for field in fields:
         edges = _cut_left_join(edges, nodes, field, "namespace")
         edges = _cut_left_join(edges, nodes, field, "category")
