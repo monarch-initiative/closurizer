@@ -78,10 +78,10 @@ def add_closure(node_file: str,
     print("closure_label_table")
     print(etl.head(closure_label_table))
 
-    # add taxon label to nodes
-    nodes = _cut_left_join(nodes, nodes, "in_taxon", "label")
+    for field in node_fields_to_label_expand:
+        nodes = _cut_left_join(nodes, nodes, field, "label")
 
-    for field in fields:
+    for field in edge_fields_to_expand:
         edges = _cut_left_join(edges, nodes, field, "namespace")
         edges = _cut_left_join(edges, nodes, field, "category")
         edges = _cut_left_join(edges, closure_id_table, field, "closure")
@@ -92,7 +92,8 @@ def add_closure(node_file: str,
     print("edges table")
     print(etl.head(edges))
 
-    etl.totsv(edges, f"{path}/{output_file}")
+    etl.totsv(edges, f"{path}/{edge_output_file}")
+    etl.totsv(nodes, f"{path}/{node_output_file}"
 
     # Clean up extracted node & edge files
     if os.path.exists(f"{path}/{node_file}"):
