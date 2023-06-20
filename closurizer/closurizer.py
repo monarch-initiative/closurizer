@@ -21,15 +21,20 @@ def add_closure(node_file: str,
                 kg_archive: str,
                 closure_file: str,
                 path: str,
-                fields: List[str],
-                output_file: str):
+                node_fields_to_label_expand: List[str],
+                edge_fields_to_expand: List[str],
+                node_output_file: str,
+                edge_output_file: str
+                ):
     print("Generating closure KG...")
     print(f"node_file: {node_file}")
     print(f"edge_file: {edge_file}")
     print(f"kg_archive: {kg_archive}")
     print(f"closure_file: {closure_file}")
-    print(f"fields: {','.join(fields)}")
-    print(f"output_file: {output_file}")
+    print(f"node_fields_to_label_expand: {', '.join(node_fields_to_label_expand)}")
+    print(f"edge_fields_to_expand: {', '.join(edge_fields_to_expand)}")
+    print(f"node_output_file: {node_output_file}")
+    print(f"edge_output_file: {edge_output_file}")
 
     tar = tarfile.open(f"{path}/{kg_archive}")
     tar.extract(node_file, path=path)
