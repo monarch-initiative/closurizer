@@ -93,7 +93,7 @@ def add_closure(node_file: str,
     print(etl.head(edges))
 
     etl.totsv(edges, f"{path}/{edge_output_file}")
-    etl.totsv(nodes, f"{path}/{node_output_file}"
+    etl.totsv(nodes, f"{path}/{node_output_file}")
 
     # Clean up extracted node & edge files
     if os.path.exists(f"{path}/{node_file}"):
