@@ -79,7 +79,8 @@ def add_closure(node_file: str,
     print(etl.head(closure_label_table))
 
     for field in node_fields_to_label_expand:
-        nodes = _cut_left_join(nodes, nodes, field, "label")
+        # The rename here is necessary to pull turn name in the nodes table into {field}_label after the join
+        nodes = _cut_left_join(nodes, nodes.rename("name","label"), field, "label")
 
     for field in edge_fields_to_expand:
         edges = _cut_left_join(edges, nodes, field, "namespace")
