@@ -15,6 +15,11 @@ def _cut_left_join(ltable, rtable, field, attribute):
                         lkey=field,
                         rkey="id")
 
+def _length(value):
+    if value is None:
+        return 0
+    else:
+        return len(value.split("|"))
 
 def add_closure(kg_archive: str,
                 closure_file: str,
@@ -78,6 +83,11 @@ def add_closure(kg_archive: str,
         edges = _cut_left_join(edges, closure_label_table, field, "closure_label")
         edges = etl.leftjoin(edges, (etl.cut(nodes, ["id", "name"]).rename("name", f"{field}_label")), lkey=field,
                              rkey="id")
+
+    print("Adding evidence counts...")
+    edges = etl.addfield(edges, 'evidence_count',
+                         lambda rec: _length(rec['has_evidence'])
+                                     + _length(rec['publications']) + _length(rec['primary_knowledge_source']) + _length(rec['provided_by']))
 
     print("Denormalizing...")
     etl.totsv(edges, f"{output_file}")
