@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "closurizer"
-version = "0.1.7"
+version = "0.2.0"
 description = "Add closure expansion fields to kgx files following the Golr pattern"
 authors = ["Kevin Schaper <kevin@tislab.org>"]
 
