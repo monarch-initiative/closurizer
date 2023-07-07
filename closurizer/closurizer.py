@@ -15,11 +15,24 @@ def _cut_left_join(ltable, rtable, field, attribute):
                         lkey=field,
                         rkey="id")
 
+def _length(value):
+    if value is None:
+        return 0
+    else:
+        return len(value.split("|"))
+
+def _length_of_field_values(rec, fields):
+    value = 0
+    for field in fields:
+        if field in rec and (field_value := rec[field]) is not None:
+            value += _length(field_value)
+    return value
 
 def add_closure(kg_archive: str,
                 closure_file: str,
                 output_file: str,
-                fields: List[str] = None
+                fields: List[str] = ['subject', 'object'],
+                evidence_fields: List[str] = ['has_evidence', 'publications', 'primary_knowledge_source', 'provided_by']
                 ):
     print("Generating closure KG...")
     print(f"kg_archive: {kg_archive}")
@@ -27,6 +40,9 @@ def add_closure(kg_archive: str,
 
     if fields is None or len(fields) == 0:
         fields = ['subject', 'object']
+
+    if evidence_fields is None or len(evidence_fields) == 0:
+        evidence_fields = ['has_evidence', 'publications', 'primary_knowledge_source', 'provided_by']
 
     print(f"fields: {','.join(fields)}")
     print(f"output_file: {output_file}")
@@ -78,6 +94,11 @@ def add_closure(kg_archive: str,
         edges = _cut_left_join(edges, closure_label_table, field, "closure_label")
         edges = etl.leftjoin(edges, (etl.cut(nodes, ["id", "name"]).rename("name", f"{field}_label")), lkey=field,
                              rkey="id")
+
+    print("Adding evidence counts...")
+
+    edges = etl.addfield(edges, 'evidence_count',
+                         lambda rec: _length_of_field_values(rec, evidence_fields))
 
     print("Denormalizing...")
     etl.totsv(edges, f"{output_file}")
