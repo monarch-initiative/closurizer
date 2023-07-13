@@ -24,7 +24,7 @@ def _length(value):
 def _length_of_field_values(rec, fields):
     value = 0
     for field in fields:
-        if field in rec and (field_value := rec[field]) is not None:
+        if (field_value := rec[field]) is not None:
             value += _length(field_value)
     return value
 
@@ -32,7 +32,7 @@ def add_closure(kg_archive: str,
                 closure_file: str,
                 output_file: str,
                 fields: List[str] = ['subject', 'object'],
-                evidence_fields: List[str] = ['has_evidence', 'publications', 'primary_knowledge_source', 'provided_by']
+                evidence_fields: List[str] = ['has_evidence', 'publications', 'primary_knowledge_source']
                 ):
     print("Generating closure KG...")
     print(f"kg_archive: {kg_archive}")
