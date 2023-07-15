@@ -16,7 +16,7 @@ def _cut_left_join(ltable, rtable, field, attribute):
                         rkey="id")
 
 def _length(value):
-    if value is None:
+    if value is None or value == "":
         return 0
     else:
         return len(value.split("|"))
