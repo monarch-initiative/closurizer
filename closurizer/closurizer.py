@@ -9,14 +9,16 @@ def _string_agg(key, rows):
     return [key, "|".join(row[1] for row in rows)]
 
 
-def _cut_left_join(ltable, rtable, field, attribute):
+def _cut_left_join(ltable, rtable, field, attribute, rename_attribute = None):
+    if rename_attribute is None:
+        rename_attribute = attribute
     return etl.leftjoin(ltable,
-                        (etl.cut(rtable, ['id', attribute]).rename(attribute, f"{field}_{attribute}")),
+                        (etl.cut(rtable, ['id', attribute]).rename(attribute, f"{field}_{rename_attribute}")),
                         lkey=field,
                         rkey="id")
 
 def _length(value):
-    if value is None:
+    if value is None or value == "":
         return 0
     else:
         return len(value.split("|"))
@@ -92,8 +94,14 @@ def add_closure(kg_archive: str,
         edges = _cut_left_join(edges, nodes, field, "category")
         edges = _cut_left_join(edges, closure_id_table, field, "closure")
         edges = _cut_left_join(edges, closure_label_table, field, "closure_label")
-        edges = etl.leftjoin(edges, (etl.cut(nodes, ["id", "name"]).rename("name", f"{field}_label")), lkey=field,
-                             rkey="id")
+        # only add taxon labels to subject & object
+        edges = _cut_left_join(edges, nodes, field, "name", rename_attribute="label")
+
+        if field in ['subject', 'object']:
+            edges = _cut_left_join(edges, nodes, field, "in_taxon", rename_attribute="taxon")
+            edges = _cut_left_join(edges, nodes, field, "in_taxon_label", rename_attribute="taxon_label")
+
+
 
     print("Adding evidence counts...")
 
