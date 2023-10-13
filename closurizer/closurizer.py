@@ -57,7 +57,7 @@ def add_closure(kg_archive: str,
     node_file = f"{node_file_name}"
     print(f"node_file: {node_file}")
     nodes = etl.fromtsv(node_file)
-    nodes = etl.addfield(nodes, 'namespace', lambda rec: rec['id'][:rec['id'].index(":")])
+    nodes = etl.addfield(nodes, 'namespace', lambda rec: rec['id'][:rec['id'].index(":")] if ':' in rec['id'] else None)
 
     edge_file_name = [member.name for member in tar.getmembers() if member.name.endswith('_edges.tsv') ][0]
     tar.extract(edge_file_name)
