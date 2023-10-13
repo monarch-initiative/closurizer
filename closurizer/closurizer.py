@@ -34,7 +34,7 @@ def add_closure(kg_archive: str,
                 closure_file: str,
                 output_file: str,
                 fields: List[str] = ['subject', 'object'],
-                evidence_fields: List[str] = ['has_evidence', 'publications', 'primary_knowledge_source']
+                evidence_fields: List[str] = None
                 ):
     print("Generating closure KG...")
     print(f"kg_archive: {kg_archive}")
@@ -44,7 +44,7 @@ def add_closure(kg_archive: str,
         fields = ['subject', 'object']
 
     if evidence_fields is None or len(evidence_fields) == 0:
-        evidence_fields = ['has_evidence', 'publications', 'primary_knowledge_source', 'provided_by']
+        evidence_fields = ['has_evidence', 'publications']
 
     print(f"fields: {','.join(fields)}")
     print(f"output_file: {output_file}")
