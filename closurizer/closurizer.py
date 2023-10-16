@@ -59,11 +59,15 @@ def add_closure(kg_archive: str,
     nodes = etl.fromtsv(node_file)
     nodes = etl.addfield(nodes, 'namespace', lambda rec: rec['id'][:rec['id'].index(":")] if ':' in rec['id'] else None)
 
+    print("writing node table...")
+    nodes.progress(100000).totsv(f"nodes.tsv")
+
     edge_file_name = [member.name for member in tar.getmembers() if member.name.endswith('_edges.tsv') ][0]
     tar.extract(edge_file_name)
     edge_file = f"{edge_file_name}"
     print(f"edge_file: {edge_file}")
     edges = etl.fromtsv(edge_file)
+
 
     # Load the relation graph tsv in long format mapping a node to each of it's ancestors
     closure_table = (etl
@@ -77,39 +81,45 @@ def add_closure(kg_archive: str,
                                       reducer=_string_agg,
                                       header=['id', 'ancestors'])
                         .rename('ancestors', 'closure'))
-
+    print("writing closure_id_table...")
+    closure_id_table.progress(100000).totsv(f"closure_id_table.tsv")
     # Prepare the closure label table, mapping node IDs to pipe separated lists of ancestor names
-    closure_label_table = (etl.leftjoin(closure_table,
-                                        etl.cut(nodes, ["id", "name"]),
-                                        lkey="ancestor",
-                                        rkey="id")
-                           .cutout("ancestor")
-                           .rename("name", "closure_label")
-                           .selectnotnone("closure_label")
-                           .rowreduce(key='id', reducer=_string_agg, header=['id', 'ancestor_labels'])
-                           .rename('ancestor_labels', 'closure_label'))
+    # closure_label_table = (etl.leftjoin(closure_table,
+    #                                     etl.cut(nodes, ["id", "name"]),
+    #                                     lkey="ancestor",
+    #                                     rkey="id")
+    #                        .cutout("ancestor")
+    #                        .rename("name", "closure_label")
+    #                        .selectnotnone("closure_label")
+    #                        .rowreduce(key='id', reducer=_string_agg, header=['id', 'ancestor_labels'])
+    #                        .rename('ancestor_labels', 'closure_label'))
+    provided_by_values = edges.cut(['provided_by']).distinct('provided_by').values('provided_by')
+    print(f"provided_by_values: {provided_by_values}")
+    for provided_by in provided_by_values:
+        edges_subset = edges.selecteq('provided_by', provided_by)
 
-    for field in fields:
-        edges = _cut_left_join(edges, nodes, field, "namespace")
-        edges = _cut_left_join(edges, nodes, field, "category")
-        edges = _cut_left_join(edges, closure_id_table, field, "closure")
-        edges = _cut_left_join(edges, closure_label_table, field, "closure_label")
-        # only add taxon labels to subject & object
-        edges = _cut_left_join(edges, nodes, field, "name", rename_attribute="label")
+        for field in fields:
 
-        if field in ['subject', 'object']:
-            edges = _cut_left_join(edges, nodes, field, "in_taxon", rename_attribute="taxon")
-            edges = _cut_left_join(edges, nodes, field, "in_taxon_label", rename_attribute="taxon_label")
+            # just labels for anything other than subject/object
+            edges_subset = _cut_left_join(edges_subset, nodes, field, "name", rename_attribute="label")
+
+            if field in ['subject', 'object']:
+                edges_subset = _cut_left_join(edges_subset, nodes, field, "namespace")
+                edges_subset = _cut_left_join(edges_subset, nodes, field, "category")
+                edges_subset = _cut_left_join(edges_subset, closure_id_table, field, "closure")
+                #       edges_subset = _cut_left_join(edges_subset, closure_label_table, field, "closure_label")
+                edges_subset = _cut_left_join(edges_subset, nodes, field, "in_taxon", rename_attribute="taxon")
+                edges_subset = _cut_left_join(edges_subset, nodes, field, "in_taxon_label", rename_attribute="taxon_label")
 
 
 
-    print("Adding evidence counts...")
+        print("Adding evidence counts...")
 
-    edges = etl.addfield(edges, 'evidence_count',
-                         lambda rec: _length_of_field_values(rec, evidence_fields))
+        edges_subset = etl.addfield(edges_subset, 'evidence_count',
+                             lambda rec: _length_of_field_values(rec, evidence_fields))
 
-    print("Denormalizing...")
-    etl.totsv(edges, f"{output_file}")
+        print(f"Denormalizing {provided_by}...")
+        edges_subset.progress(100000).totsv(f"{provided_by}-{output_file}")
 
     # Clean up extracted node & edge files
     if os.path.exists(f"{node_file}"):
