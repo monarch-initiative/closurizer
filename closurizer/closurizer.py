@@ -30,11 +30,16 @@ def _length_of_field_values(rec, fields):
             value += _length(field_value)
     return value
 
+def namespace(rec):
+    # print(rec['id'])
+    return rec['id'][:rec['id'].index(":")]
+
 def add_closure(kg_archive: str,
                 closure_file: str,
                 output_file: str,
                 fields: List[str] = ['subject', 'object'],
-                evidence_fields: List[str] = None
+                evidence_fields: List[str] = None,
+                grouping_fields: List[str] = None
                 ):
     print("Generating closure KG...")
     print(f"kg_archive: {kg_archive}")
@@ -57,13 +62,16 @@ def add_closure(kg_archive: str,
     node_file = f"{node_file_name}"
     print(f"node_file: {node_file}")
     nodes = etl.fromtsv(node_file)
-    nodes = etl.addfield(nodes, 'namespace', lambda rec: rec['id'][:rec['id'].index(":")] if ':' in rec['id'] else None)
+    nodes = etl.addfield(nodes, 'namespace', namespace)
 
     edge_file_name = [member.name for member in tar.getmembers() if member.name.endswith('_edges.tsv') ][0]
     tar.extract(edge_file_name)
     edge_file = f"{edge_file_name}"
     print(f"edge_file: {edge_file}")
     edges = etl.fromtsv(edge_file)
+
+    if grouping_fields is not None and len(grouping_fields) > 0:
+        edges["grouping_key"] = edges.addfield("grouping_key", lambda rec: "|".join([rec[field] for field in grouping_fields]))
 
     # Load the relation graph tsv in long format mapping a node to each of it's ancestors
     closure_table = (etl
@@ -109,7 +117,7 @@ def add_closure(kg_archive: str,
                          lambda rec: _length_of_field_values(rec, evidence_fields))
 
     print("Denormalizing...")
-    etl.totsv(edges, f"{output_file}")
+    etl.progress(100000).totsv(edges, f"{output_file}")
 
     # Clean up extracted node & edge files
     if os.path.exists(f"{node_file}"):
