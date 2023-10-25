@@ -71,7 +71,7 @@ def add_closure(kg_archive: str,
     edges = etl.fromtsv(edge_file)
 
     if grouping_fields is not None and len(grouping_fields) > 0:
-        edges["grouping_key"] = edges.addfield("grouping_key", lambda rec: "|".join([rec[field] for field in grouping_fields]))
+        edges = etl.addfield(edges,"grouping_key", lambda rec: "|".join([rec[field] for field in grouping_fields]))
 
     # Load the relation graph tsv in long format mapping a node to each of it's ancestors
     closure_table = (etl
