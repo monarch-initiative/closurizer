@@ -158,7 +158,7 @@ def add_closure(kg_archive: str,
         {node_columns('has_phenotype')}
     from nodes
         {node_joins('has_phenotype')}
-    where has_phenotype_edges.negated = 'False' and has_phenotype_frequency
+    where has_phenotype_edges.negated = 'False'
     group by nodes.*
     """
     print(nodes_query)
