@@ -8,6 +8,8 @@ from closurizer.closurizer import add_closure
 @click.option('--closure', required=True, help='TSV file of closure triples')
 @click.option('--nodes-output', required=True, help='file write nodes kgx file with closure fields added')
 @click.option('--edges-output', required=True, help='file write edges kgx file with closure fields added')
+@click.option('--additional-node-constraints', required=False,
+              help='additional where clause constraints to apply to the generation of the denormalized nodes output')
 @click.option('--fields', multiple=True, help='fields to closurize')
 @click.option('--grouping-fields', multiple=True, help='fields to populate a single value grouping_key field')
 @click.option('--dry-run', is_flag=True, help='A dry run will not write the output file, but will print the SQL query')
@@ -15,14 +17,16 @@ def main(kg: str,
          closure: str,
          nodes_output: str,
          edges_output: str,
+         additional_node_constraints: str = None,
          dry_run: bool = False,
          fields: List[str] = None,
          grouping_fields: List[str] = None):
     add_closure(kg_archive=kg,
                 closure_file=closure,
-                fields=fields,
+                edge_fields=fields,
                 edges_output_file=edges_output,
                 nodes_output_file=nodes_output,
+                additional_node_constraints=additional_node_constraints,
                 dry_run=dry_run,
                 grouping_fields=grouping_fields)
 

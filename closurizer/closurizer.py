@@ -71,7 +71,9 @@ def add_closure(kg_archive: str,
                 closure_file: str,
                 nodes_output_file: str,
                 edges_output_file: str,
-                fields: List[str] = ['subject', 'object'],
+                node_fields: List[str] = None,
+                edge_fields: List[str] = ['subject', 'object'],
+                additional_node_constraints: str = None,
                 dry_run: bool  = False,
                 evidence_fields: List[str] = None,
                 grouping_fields: List[str] = None
@@ -82,8 +84,8 @@ def add_closure(kg_archive: str,
 
     db = duckdb.connect(database='monarch-kg.duckdb')
 
-    if fields is None or len(fields) == 0:
-        fields = ['subject', 'object']
+    if edge_fields is None or len(edge_fields) == 0:
+        edge_fields = ['subject', 'object']
 
     if evidence_fields is None or len(evidence_fields) == 0:
         evidence_fields = ['has_evidence', 'publications']
@@ -93,7 +95,7 @@ def add_closure(kg_archive: str,
 
 
     if not dry_run:
-        print(f"fields: {','.join(fields)}")
+        print(f"fields: {','.join(edge_fields)}")
         print(f"output_file: {edges_output_file}")
 
         tar = tarfile.open(f"{kg_archive}")
@@ -143,11 +145,11 @@ def add_closure(kg_archive: str,
     edges_query = f"""
     create or replace table denormalized_edges as
     select edges.*, 
-           {"".join([edge_columns(field) for field in fields])}
+           {"".join([edge_columns(field) for field in edge_fields])}
            {evidence_sum(evidence_fields)}
            {grouping_key(grouping_fields)}  
     from edges
-        {"".join([edge_joins(field) for field in fields])}
+        {"".join([edge_joins(field) for field in edge_fields])}
     """
 
     print(edges_query)
@@ -155,10 +157,10 @@ def add_closure(kg_archive: str,
     nodes_query = f"""        
     create or replace table denormalized_nodes as
     select nodes.*, 
-        {node_columns('has_phenotype')}
+        {"".join([node_columns(node_field) for node_field in node_fields])}
     from nodes
         {node_joins('has_phenotype')}
-    where has_phenotype_edges.negated is null or has_phenotype_edges.negated = 'False'
+    where {additional_node_constraints}
     group by nodes.*
     """
     print(nodes_query)
