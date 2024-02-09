@@ -9,8 +9,8 @@ def edge_columns(field):
        {field}.name as {field}_label, 
        {field}.category as {field}_category,
        {field}.namespace as {field}_namespace,
-       {field}_closure.closure as {field}_closure,
-       {field}_closure_label.closure_label as {field}_closure_label,    
+       string_agg({field}_closure.closure,'|') as {field}_closure,
+       string_agg({field}_closure_label.closure_label,'|') as {field}_closure_label,    
     """
     if field in ['subject', 'object']:
         column_text += f"""
@@ -22,8 +22,8 @@ def edge_columns(field):
 def edge_joins(field):
     return f"""
     left outer join nodes as {field} on edges.{field} = {field}.id
-    left outer join closure_id as {field}_closure on {field}.id = {field}_closure.id
-    left outer join closure_label as {field}_closure_label on {field}.id = {field}_closure_label.id
+    left outer join closure_id_array as {field}_closure on {field}.id = {field}_closure.id
+    left outer join closure_label_array as {field}_closure_label on {field}.id = {field}_closure_label.id
     """
 
 def evidence_sum(evidence_fields):
