@@ -65,7 +65,7 @@ def grouping_key(grouping_fields):
         else:
             fragments.append(field)
     grouping_key_fragments = ", ".join(fragments)
-    return f"concat_ws('🍪', {grouping_key_fragments}) as grouping_key"
+    return f"concat_ws('|', {grouping_key_fragments}) as grouping_key"
 
 def add_closure(kg_archive: str,
                 closure_file: str,
