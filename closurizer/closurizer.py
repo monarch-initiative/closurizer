@@ -22,8 +22,8 @@ def edge_columns(field):
 def edge_joins(field):
     return f"""
     left outer join nodes as {field} on edges.{field} = {field}.id
-    left outer join closure_id_array as {field}_closure on {field}.id = {field}_closure.id
-    left outer join closure_label_array as {field}_closure_label on {field}.id = {field}_closure_label.id
+    left outer join closure_id as {field}_closure on {field}.id = {field}_closure.id
+    left outer join closure_label as {field}_closure_label on {field}.id = {field}_closure_label.id
     """
 
 def evidence_sum(evidence_fields):
@@ -51,9 +51,9 @@ def node_joins(predicate):
       left outer join denormalized_edges as {field}_edges 
         on nodes.id = {field}_edges.subject 
            and {field}_edges.predicate = 'biolink:{field}'
-      left outer join closure_id_array as {field}_closure
+      left outer join closure_id as {field}_closure
         on {field}_edges.object = {field}_closure.id
-      left outer join closure_label_array as {field}_closure_label
+      left outer join closure_label as {field}_closure_label
         on {field}_edges.object = {field}_closure_label.id
     """
 
@@ -125,20 +125,11 @@ def add_closure(kg_archive: str,
         """)
 
         db.sql("""
-        create or replace table closure_id as select subject_id as id, string_agg(object_id, '|') as closure from closure group by subject_id
+        create or replace table closure_id as select subject_id as id, array_agg(object_id) as closure from closure group by subject_id
         """)
 
         db.sql("""
-        create or replace table closure_id_array as select subject_id as id, array_agg(object_id) as closure from closure group by subject_id
-        """)
-
-        db.sql("""
-        create or replace table closure_label as select subject_id as id, string_agg(name, '|') as closure_label from closure join nodes on object_id = id
-        group by subject_id
-        """)
-
-        db.sql("""
-        create or replace table closure_label_array as select subject_id as id, array_agg(name) as closure_label from closure join nodes on object_id = id
+        create or replace table closure_label as select subject_id as id, array_agg(name) as closure_label from closure join nodes on object_id = id
         group by subject_id
         """)
 
