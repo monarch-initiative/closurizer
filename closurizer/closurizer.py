@@ -9,8 +9,8 @@ def edge_columns(field):
        {field}.name as {field}_label, 
        {field}.category as {field}_category,
        {field}.namespace as {field}_namespace,
-       string_agg({field}_closure.closure,'|') as {field}_closure,
-       string_agg({field}_closure_label.closure_label,'|') as {field}_closure_label,    
+       list_aggregate({field}_closure.closure, 'string_agg', '|') as {field}_closure,
+       list_aggregate({field}_closure_label.closure_label,'string_agg', '|') as {field}_closure_label,    
     """
     if field in ['subject', 'object']:
         column_text += f"""
