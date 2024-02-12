@@ -4,13 +4,13 @@ import os
 import tarfile
 import duckdb
 
-def columns(field):
+def edge_columns(field):
     column_text = f"""
        {field}.name as {field}_label, 
        {field}.category as {field}_category,
        {field}.namespace as {field}_namespace,
-       {field}_closure.closure as {field}_closure,
-       {field}_closure_label.closure_label as {field}_closure_label,    
+       list_aggregate({field}_closure.closure, 'string_agg', '|') as {field}_closure,
+       list_aggregate({field}_closure_label.closure_label,'string_agg', '|') as {field}_closure_label,    
     """
     if field in ['subject', 'object']:
         column_text += f"""
@@ -19,7 +19,7 @@ def columns(field):
         """
     return column_text
 
-def joins(field):
+def edge_joins(field):
     return f"""
     left outer join nodes as {field} on edges.{field} = {field}.id
     left outer join closure_id as {field}_closure on {field}.id = {field}_closure.id
@@ -31,6 +31,32 @@ def evidence_sum(evidence_fields):
     evidence_count_sum = "+".join([f"len(split({field}, '|'))" for field in evidence_fields])
     return f"{evidence_count_sum} as evidence_count,"
 
+
+def node_columns(predicate):
+    # strip the biolink predicate, if necessary to get the field name
+    field = predicate.replace('biolink:','')
+
+    return f"""
+    string_agg({field}_edges.object, '|') as {field},
+    string_agg({field}_edges.object_label, '|') as {field}_label,
+    count (distinct {field}_edges.object) as {field}_count,
+    list_aggregate(list_distinct(flatten(array_agg({field}_closure.closure))), 'string_agg', '|') as {field}_closure,
+    list_aggregate(list_distinct(flatten(array_agg({field}_closure_label.closure_label))), 'string_agg', '|') as {field}_closure_label,
+    """
+
+def node_joins(predicate):
+    # strip the biolink predicate, if necessary to get the field name
+    field = predicate.replace('biolink:','')
+    return f"""
+      left outer join denormalized_edges as {field}_edges 
+        on nodes.id = {field}_edges.subject 
+           and {field}_edges.predicate = 'biolink:{field}'
+      left outer join closure_id as {field}_closure
+        on {field}_edges.object = {field}_closure.id
+      left outer join closure_label as {field}_closure_label
+        on {field}_edges.object = {field}_closure_label.id
+    """
+
 def grouping_key(grouping_fields):
     fragments = []
     for field in grouping_fields:
@@ -39,12 +65,15 @@ def grouping_key(grouping_fields):
         else:
             fragments.append(field)
     grouping_key_fragments = ", ".join(fragments)
-    return f"concat_ws('🍪', {grouping_key_fragments}) as grouping_key"
+    return f"concat_ws('|', {grouping_key_fragments}) as grouping_key"
 
 def add_closure(kg_archive: str,
                 closure_file: str,
-                output_file: str,
-                fields: List[str] = ['subject', 'object'],
+                nodes_output_file: str,
+                edges_output_file: str,
+                node_fields: List[str] = None,
+                edge_fields: List[str] = ['subject', 'object'],
+                additional_node_constraints: str = None,
                 dry_run: bool  = False,
                 evidence_fields: List[str] = None,
                 grouping_fields: List[str] = None
@@ -55,8 +84,8 @@ def add_closure(kg_archive: str,
 
     db = duckdb.connect(database='monarch-kg.duckdb')
 
-    if fields is None or len(fields) == 0:
-        fields = ['subject', 'object']
+    if edge_fields is None or len(edge_fields) == 0:
+        edge_fields = ['subject', 'object']
 
     if evidence_fields is None or len(evidence_fields) == 0:
         evidence_fields = ['has_evidence', 'publications']
@@ -66,8 +95,8 @@ def add_closure(kg_archive: str,
 
 
     if not dry_run:
-        print(f"fields: {','.join(fields)}")
-        print(f"output_file: {output_file}")
+        print(f"fields: {','.join(edge_fields)}")
+        print(f"output_file: {edges_output_file}")
 
         tar = tarfile.open(f"{kg_archive}")
 
@@ -96,32 +125,49 @@ def add_closure(kg_archive: str,
         """)
 
         db.sql("""
-        create or replace table closure_id as select subject_id as id, string_agg(object_id, '|') as closure from closure group by subject_id
+        create or replace table closure_id as select subject_id as id, array_agg(object_id) as closure from closure group by subject_id
         """)
 
         db.sql("""
-        create or replace table closure_label as select subject_id as id, string_agg(name, '|') as closure_label from closure join nodes on object_id = id
+        create or replace table closure_label as select subject_id as id, array_agg(name) as closure_label from closure join nodes on object_id = id
         group by subject_id
         """)
 
-    query = f"""
+    edges_query = f"""
     create or replace table denormalized_edges as
     select edges.*, 
-           {"".join([columns(field) for field in fields])}
+           {"".join([edge_columns(field) for field in edge_fields])}
            {evidence_sum(evidence_fields)}
            {grouping_key(grouping_fields)}  
     from edges
-        {"".join([joins(field) for field in fields])}
+        {"".join([edge_joins(field) for field in edge_fields])}
     """
 
-    print(query)
+    print(edges_query)
+
+    nodes_query = f"""        
+    create or replace table denormalized_nodes as
+    select nodes.*, 
+        {"".join([node_columns(node_field) for node_field in node_fields])}
+    from nodes
+        {node_joins('has_phenotype')}
+    where {additional_node_constraints}
+    group by nodes.*
+    """
+    print(nodes_query)
 
     if not dry_run:
-        db.query(query)
+        db.query(edges_query)
         db.query(f"""
         -- write denormalized_edges as tsv
-        copy (select * from denormalized_edges) to '{output_file}' (header, delimiter '\t')
+        copy (select * from denormalized_edges) to '{edges_output_file}' (header, delimiter '\t')
         """)
+        db.query(nodes_query)
+        db.query(f"""
+        -- write denormalized_nodes as tsv
+        copy (select * from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
+        """)
+
 
         # Clean up extracted node & edge files
         if os.path.exists(f"{node_file}"):
