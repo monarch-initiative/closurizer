@@ -28,7 +28,7 @@ def edge_joins(field):
 
 def evidence_sum(evidence_fields):
     """ Sum together the length of each field after splitting on | """
-    evidence_count_sum = "+".join([f"len(split({field}, '|'))" for field in evidence_fields])
+    evidence_count_sum = "+".join([f"ifnull(len(split({field}, '|')),0)" for field in evidence_fields])
     return f"{evidence_count_sum} as evidence_count,"
 
 
