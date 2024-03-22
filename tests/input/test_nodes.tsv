@@ -1,0 +1,9 @@
+id	name	category	in_taxon	in_taxon_label
+X:1	x1	Gene	NCBITaxon:9606	human
+X:2	x2	Gene	NCBITaxon:9606	human
+X:3	x3	Gene	NCBITaxon:9606	human
+X:4	x4	Gene	NCBITaxon:9606	human
+Y:1	y1	Gene	NCBITaxon:9606	human
+Y:2	y2	Gene	NCBITaxon:9606	human
+Y:3	y3	Gene	NCBITaxon:9606	human
+Y:4	y4	Gene	NCBITaxon:9606	human

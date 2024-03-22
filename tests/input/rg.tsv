@@ -1,0 +1,10 @@
+subject	predicate	object
+X:4	rdfs:subClassOf	X:4
+X:4	rdfs:subClassOf	X:3
+X:4	rdfs:subClassOf	X:2
+X:4	rdfs:subClassOf	X:1
+X:3	rdfs:subClassOf	X:3
+X:3	rdfs:subClassOf	X:2
+X:3	rdfs:subClassOf	X:1
+X:2	rdfs:subClassOf	X:2
+X:2	rdfs:subClassOf	X:1
