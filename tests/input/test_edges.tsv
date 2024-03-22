@@ -1,0 +1,5 @@
+subject	predicate	object	has_evidence	publications	negated
+X:1	biolink:related_to	Y:1	ECO:1	PMID:1	False
+X:2	biolink:related_to	Y:2	ECO:1	PMID:1	False
+X:3	biolink:related_to	Y:3	ECO:1	PMID:1	False
+X:4	biolink:related_to	Y:4	ECO:1	PMID:1	True
