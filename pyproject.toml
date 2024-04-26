@@ -8,7 +8,7 @@ authors = ["Kevin Schaper <kevin@tislab.org>"]
 python = "^3.8"
 click = "^8"
 SQLAlchemy = "^1.4.37"
-duckdb = "^0.9.1"
+duckdb = "^0.10.2"
 
 [tool.poetry.dev-dependencies]
 
