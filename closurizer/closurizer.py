@@ -57,15 +57,17 @@ def node_joins(predicate):
         on {field}_edges.object = {field}_closure_label.id
     """
 
+
 def grouping_key(grouping_fields):
     fragments = []
     for field in grouping_fields:
         if field == 'negated':
-            fragments.append(f"coalesce({field}.replace('True','NOT'), '')")
+            fragments.append(f"coalesce(cast({field} as varchar).replace('true','NOT'), '')")
         else:
             fragments.append(field)
     grouping_key_fragments = ", ".join(fragments)
     return f"concat_ws('|', {grouping_key_fragments}) as grouping_key"
+
 
 def add_closure(kg_archive: str,
                 closure_file: str,
