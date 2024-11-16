@@ -96,6 +96,8 @@ def add_closure(kg_archive: str,
     if grouping_fields is None or len(grouping_fields) == 0:
         grouping_fields = ['subject', 'negated', 'predicate', 'object']
 
+    if edge_fields_to_label is None:
+        edge_fields_to_label = []
 
     if not dry_run:
         print(f"fields: {','.join(edge_fields)}")
