@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "closurizer"
-version = "0.6.0"
+version = "0.7.0"
 description = "Add closure expansion fields to kgx files following the Golr pattern"
 authors = ["Kevin Schaper <kevin@tislab.org>"]
 
@@ -8,7 +8,7 @@ authors = ["Kevin Schaper <kevin@tislab.org>"]
 python = "^3.8"
 click = "^8"
 SQLAlchemy = "^1.4.37"
-duckdb = "^1.1.3"
+duckdb = "*"
 
 [tool.poetry.dev-dependencies]
 
