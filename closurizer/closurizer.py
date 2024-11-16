@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import os
 import tarfile
@@ -73,31 +73,19 @@ def add_closure(kg_archive: str,
                 closure_file: str,
                 nodes_output_file: str,
                 edges_output_file: str,
-                node_fields: List[str] = None,
+                node_fields: List[str] = [],
                 edge_fields: List[str] = ['subject', 'object'],
-                edge_fields_to_label: List[str] = None,
-                additional_node_constraints: str = None,
+                edge_fields_to_label: List[str] = [],
+                additional_node_constraints: Optional[str] = None,
                 dry_run: bool  = False,
-                evidence_fields: List[str] = None,
-                grouping_fields: List[str] = None
+                evidence_fields: List[str] = ['has_evidence', 'publications'],
+                grouping_fields: List[str] = ['subject', 'negated', 'predicate', 'object']
                 ):
     print("Generating closure KG...")
     print(f"kg_archive: {kg_archive}")
     print(f"closure_file: {closure_file}")
 
     db = duckdb.connect(database='monarch-kg.duckdb')
-
-    if edge_fields is None or len(edge_fields) == 0:
-        edge_fields = ['subject', 'object']
-
-    if evidence_fields is None or len(evidence_fields) == 0:
-        evidence_fields = ['has_evidence', 'publications']
-
-    if grouping_fields is None or len(grouping_fields) == 0:
-        grouping_fields = ['subject', 'negated', 'predicate', 'object']
-
-    if edge_fields_to_label is None:
-        edge_fields_to_label = []
 
     if not dry_run:
         print(f"fields: {','.join(edge_fields)}")
