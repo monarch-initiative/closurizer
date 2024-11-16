@@ -4,7 +4,7 @@ import os
 import tarfile
 import duckdb
 
-def edge_columns(field):
+def edge_columns(field: str, include_closure_fields: bool =True):
     column_text = f"""
        {field}.name as {field}_label, 
        {field}.category as {field}_category,
@@ -19,14 +19,14 @@ def edge_columns(field):
         """
     return column_text
 
-def edge_joins(field):
+def edge_joins(field: str, include_closure_joins: bool =True):
     return f"""
     left outer join nodes as {field} on edges.{field} = {field}.id
     left outer join closure_id as {field}_closure on {field}.id = {field}_closure.id
     left outer join closure_label as {field}_closure_label on {field}.id = {field}_closure_label.id
     """
 
-def evidence_sum(evidence_fields):
+def evidence_sum(evidence_fields: List[str]):
     """ Sum together the length of each field after splitting on | """
     evidence_count_sum = "+".join([f"ifnull(len(split({field}, '|')),0)" for field in evidence_fields])
     return f"{evidence_count_sum} as evidence_count,"
@@ -75,6 +75,7 @@ def add_closure(kg_archive: str,
                 edges_output_file: str,
                 node_fields: List[str] = None,
                 edge_fields: List[str] = ['subject', 'object'],
+                edge_fields_to_label: List[str] = None,
                 additional_node_constraints: str = None,
                 dry_run: bool  = False,
                 evidence_fields: List[str] = None,
@@ -139,10 +140,12 @@ def add_closure(kg_archive: str,
     create or replace table denormalized_edges as
     select edges.*, 
            {"".join([edge_columns(field) for field in edge_fields])}
+           {"".join([edge_columns(field, include_closure_fields=False) for field in edge_fields_to_label])} 
            {evidence_sum(evidence_fields)}
            {grouping_key(grouping_fields)}  
     from edges
         {"".join([edge_joins(field) for field in edge_fields])}
+        {"".join([edge_joins(field, include_closure_joins=False) for field in edge_fields_to_label])}
     """
 
     print(edges_query)
