@@ -172,7 +172,7 @@ def add_closure(kg_archive: str,
 
         edges_export_query = f"""
         -- write denormalized_edges as tsv
-        copy (select *, {edge_closure_replacements} from denormalized_edges) to '{edges_output_file}' (header, delimiter '\t')
+        copy (select * {edge_closure_replacements} from denormalized_edges) to '{edges_output_file}' (header, delimiter '\t')
         """
         print(edges_export_query)
         db.query(edges_export_query)
