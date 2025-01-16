@@ -156,27 +156,32 @@ def add_closure(kg_archive: str,
     """
     print(nodes_query)
 
-    edge_closure_replacements = [
-        f"""
-        list_aggregate({field}_closure.closure, 'string_agg', '|') as {field}_closure,
-        list_aggregate({field}_closure_label.closure_label, 'string_agg', '|') as {field}_closure_label
-        """
-        for field in edge_fields
-    ]
-
-    edge_closure_replacements = "REPLACE (\n" + ",\n".join(edge_closure_replacements) + ")\n"
 
     if not dry_run:
-        db.query(edges_query)
-        db.query(f"""
+
+
+        edge_closure_replacements = [
+            f"""
+            list_aggregate({field}_closure.closure, 'string_agg', '|') as {field}_closure,
+            list_aggregate({field}_closure_label.closure_label, 'string_agg', '|') as {field}_closure_label
+            """
+            for field in edge_fields
+        ]
+
+        edge_closure_replacements = "REPLACE (\n" + ",\n".join(edge_closure_replacements) + ")\n"
+
+        edges_export_query = f"""
         -- write denormalized_edges as tsv
         copy (select *, {edge_closure_replacements} from denormalized_edges) to '{edges_output_file}' (header, delimiter '\t')
-        """)
-        db.query(nodes_query)
-        db.query(f"""
+        """
+        print(edges_export_query)
+        db.query(edges_export_query)
+
+        nodes_export_query = f"""
         -- write denormalized_nodes as tsv
         copy (select * from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
-        """)
+        """
+        print(nodes_export_query)
 
 
         # Clean up extracted node & edge files
