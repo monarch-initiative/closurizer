@@ -162,8 +162,8 @@ def add_closure(kg_archive: str,
 
         edge_closure_replacements = [
             f"""
-            list_aggregate({field}_closure.closure, 'string_agg', '|') as {field}_closure,
-            list_aggregate({field}_closure_label.closure_label, 'string_agg', '|') as {field}_closure_label
+            list_aggregate({field}_closure, 'string_agg', '|') as {field}_closure,
+            list_aggregate({field}_closure_label, 'string_agg', '|') as {field}_closure_label
             """
             for field in edge_fields
         ]
