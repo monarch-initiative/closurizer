@@ -159,6 +159,7 @@ def add_closure(kg_archive: str,
 
     if not dry_run:
 
+        db.sql(edges_query)
 
         edge_closure_replacements = [
             f"""
@@ -175,14 +176,15 @@ def add_closure(kg_archive: str,
         copy (select * {edge_closure_replacements} from denormalized_edges) to '{edges_output_file}' (header, delimiter '\t')
         """
         print(edges_export_query)
-        db.query(edges_export_query)
+        db.sql(edges_export_query)
 
+        db.sql(nodes_query)
         nodes_export_query = f"""
         -- write denormalized_nodes as tsv
         copy (select * from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
         """
         print(nodes_export_query)
-
+        db.sql(nodes_export_query)
 
         # Clean up extracted node & edge files
         if os.path.exists(f"{node_file}"):
