@@ -36,29 +36,39 @@ def evidence_sum(evidence_fields: List[str]):
     return f"{evidence_count_sum} as evidence_count,"
 
 
-def node_columns(predicate):
+def node_columns(predicate, direction='outgoing'):
+    if direction == 'outgoing':
+        collect_side = 'object'
+    elif direction == 'incoming':
+        collect_side = 'subject'
     # strip the biolink predicate, if necessary to get the field name
     field = predicate.replace('biolink:','')
 
     return f"""
-    string_agg({field}_edges.object, '|') as {field},
-    string_agg({field}_edges.object_label, '|') as {field}_label,
-    count (distinct {field}_edges.object) as {field}_count,
+    string_agg({field}_edges.{collect_side}, '|') as {field},
+    string_agg({field}_edges.{collect_side}_label, '|') as {field}_label,
+    count (distinct {field}_edges.{collect_side}) as {field}_count,
     list_aggregate(list_distinct(flatten(array_agg({field}_closure.closure))), 'string_agg', '|') as {field}_closure,
     list_aggregate(list_distinct(flatten(array_agg({field}_closure_label.closure_label))), 'string_agg', '|') as {field}_closure_label,
     """
 
-def node_joins(predicate):
+def node_joins(predicate, direction='outgoing'):
+
+    if direction == 'outgoing':
+        join_side = 'subject'
+    elif direction == 'incoming':
+        join_side = 'object'
+
     # strip the biolink predicate, if necessary to get the field name
     field = predicate.replace('biolink:','')
     return f"""
       left outer join denormalized_edges as {field}_edges 
-        on nodes.id = {field}_edges.subject or nodes.id = {field}_edges.object
+        on nodes.id = {field}_edges.{join_side}
            and {field}_edges.predicate = 'biolink:{field}'
       left outer join closure_id as {field}_closure
-        on {field}_edges.object = {field}_closure.id
+        on {field}_edges.{join_side} = {field}_closure.id
       left outer join closure_label as {field}_closure_label
-        on {field}_edges.object = {field}_closure_label.id
+        on {field}_edges.{join_side} = {field}_closure_label.id
     """
 
 
@@ -77,7 +87,8 @@ def add_closure(kg_archive: str,
                 closure_file: str,
                 nodes_output_file: str,
                 edges_output_file: str,
-                node_fields: List[str] = [],
+                outgoing_node_expansion_predicates: List[str] = [],
+                incoming_node_expansion_predicates: List[str] = [],
                 edge_fields: List[str] = ['subject', 'object'],
                 edge_fields_to_label: List[str] = [],
                 additional_node_constraints: Optional[str] = None,
@@ -148,9 +159,11 @@ def add_closure(kg_archive: str,
     nodes_query = f"""        
     create or replace table denormalized_nodes as
     select nodes.*, 
-        {"".join([node_columns(node_field) for node_field in node_fields])}
+        {"".join([node_columns(node_field, direction="outgoing") for node_field in outgoing_node_expansion_predicates])}
+        {"".join([node_columns(node_field, direction="incoming") for node_field in incoming_node_expansion_predicates])}
     from nodes
-        {"".join([node_joins(predicate) for predicate in node_fields])}
+        {"".join([node_joins(predicate, direction="outgoing") for predicate in outgoing_node_expansion_predicates])}
+        {"".join([node_joins(predicate, direction="incoming") for predicate in incoming_node_expansion_predicates])}
     {additional_node_constraints}
     group by nodes.*
     """
