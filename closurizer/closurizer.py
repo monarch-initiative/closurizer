@@ -144,13 +144,17 @@ def add_closure(kg_archive: str,
 
     print(edges_query)
 
+    node_joins = [f"""
+        {node_joins(field.replace('biolink:',''))}
+    """ for field in node_fields ]
+
     additional_node_constraints = f"where {additional_node_constraints}" if additional_node_constraints else ""
     nodes_query = f"""        
     create or replace table denormalized_nodes as
     select nodes.*, 
         {"".join([node_columns(node_field) for node_field in node_fields])}
     from nodes
-        {node_joins('has_phenotype')}
+        {node_joins}
     {additional_node_constraints}
     group by nodes.*
     """
