@@ -53,7 +53,7 @@ def node_joins(predicate):
     field = predicate.replace('biolink:','')
     return f"""
       left outer join denormalized_edges as {field}_edges 
-        on nodes.id = {field}_edges.subject 
+        on nodes.id = {field}_edges.subject or nodes.id = {field}_edges.object
            and {field}_edges.predicate = 'biolink:{field}'
       left outer join closure_id as {field}_closure
         on {field}_edges.object = {field}_closure.id
