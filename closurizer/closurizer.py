@@ -150,7 +150,7 @@ def add_closure(kg_archive: str,
     select nodes.*, 
         {"".join([node_columns(node_field) for node_field in node_fields])}
     from nodes
-        {[node_joins(predicate) for predicate in node_fields]}
+        {"".join([node_joins(predicate) for predicate in node_fields])}
     {additional_node_constraints}
     group by nodes.*
     """
