@@ -30,9 +30,18 @@ def edge_joins(field: str, include_closure_joins: bool =True):
     left outer join closure_label as {field}_closure_label on {field}.id = {field}_closure_label.id
     """
 
-def evidence_sum(evidence_fields: List[str]):
+def evidence_sum(evidence_fields: List[str], multivalued_fields: List[str]):
     """ Sum together the length of each field after splitting on | """
-    evidence_count_sum = "+".join([f"ifnull(len(split({field}, '|')),0)" for field in evidence_fields])
+    evidence_count_parts = []
+    for field in evidence_fields:
+        if field in multivalued_fields:
+            # Field is already an array, use array_length
+            evidence_count_parts.append(f"ifnull(array_length({field}),0)")
+        else:
+            # Field is still string, split and count
+            evidence_count_parts.append(f"ifnull(len(split({field}, '|')),0)")
+    
+    evidence_count_sum = "+".join(evidence_count_parts) if evidence_count_parts else "0"
     return f"{evidence_count_sum} as evidence_count,"
 
 
@@ -63,6 +72,8 @@ def node_joins(predicate):
 
 
 def grouping_key(grouping_fields):
+    if not grouping_fields:
+        return "null as grouping_key"
     fragments = []
     for field in grouping_fields:
         if field == 'negated':
@@ -83,7 +94,8 @@ def add_closure(kg_archive: str,
                 additional_node_constraints: Optional[str] = None,
                 dry_run: bool  = False,
                 evidence_fields: List[str] = ['has_evidence', 'publications'],
-                grouping_fields: List[str] = ['subject', 'negated', 'predicate', 'object']
+                grouping_fields: List[str] = ['subject', 'negated', 'predicate', 'object'],
+                multivalued_fields: List[str] = ['has_evidence', 'publications', 'in_taxon', 'in_taxon_label']
                 ):
     print("Generating closure KG...")
     print(f"kg_archive: {kg_archive}")
@@ -106,6 +118,28 @@ def add_closure(kg_archive: str,
         db.sql(f"""
         create or replace table nodes as select *,  substr(id, 1, instr(id,':') -1) as namespace from read_csv('{node_file_name}', header=True, sep='\t', AUTO_DETECT=TRUE)
         """)
+        
+        # Convert multivalued fields in nodes table to varchar[] arrays
+        node_column_names = [col[0] for col in db.sql("DESCRIBE nodes").fetchall()]
+        for field in multivalued_fields:
+            if field in node_column_names:
+                # Create a new column with proper array type and replace the original
+                db.sql(f"""
+                alter table nodes add column {field}_array VARCHAR[]
+                """)
+                db.sql(f"""
+                update nodes set {field}_array = 
+                    case 
+                        when {field} is null or {field} = '' then null
+                        else split({field}, '|')
+                    end
+                """)
+                db.sql(f"""
+                alter table nodes drop column {field}
+                """)
+                db.sql(f"""
+                alter table nodes rename column {field}_array to {field}
+                """)
 
         edge_file_name = [member.name for member in tar.getmembers() if member.name.endswith('_edges.tsv') ][0]
         tar.extract(edge_file_name)
@@ -115,6 +149,28 @@ def add_closure(kg_archive: str,
         db.sql(f"""
         create or replace table edges as select * from read_csv('{edge_file_name}', header=True, sep='\t', AUTO_DETECT=TRUE)
         """)
+        
+        # Convert multivalued fields in edges table to varchar[] arrays
+        edge_column_names = [col[0] for col in db.sql("DESCRIBE edges").fetchall()]
+        for field in multivalued_fields:
+            if field in edge_column_names:
+                # Create a new column with proper array type and replace the original
+                db.sql(f"""
+                alter table edges add column {field}_array VARCHAR[]
+                """)
+                db.sql(f"""
+                update edges set {field}_array = 
+                    case 
+                        when {field} is null or {field} = '' then null
+                        else split({field}, '|')
+                    end
+                """)
+                db.sql(f"""
+                alter table edges drop column {field}
+                """)
+                db.sql(f"""
+                alter table edges rename column {field}_array to {field}
+                """)
 
         # Load the relation graph tsv in long format mapping a node to each of it's ancestors
         db.sql(f"""
@@ -135,7 +191,7 @@ def add_closure(kg_archive: str,
     select edges.*, 
            {"".join([edge_columns(field) for field in edge_fields])}
            {"".join([edge_columns(field, include_closure_fields=False) for field in edge_fields_to_label])} 
-           {evidence_sum(evidence_fields)}
+           {evidence_sum(evidence_fields, multivalued_fields)}
            {grouping_key(grouping_fields)}  
     from edges
         {"".join([edge_joins(field) for field in edge_fields])}
@@ -168,8 +224,20 @@ def add_closure(kg_archive: str,
             """
             for field in edge_fields
         ]
-
-        edge_closure_replacements = "REPLACE (\n" + ",\n".join(edge_closure_replacements) + ")\n"
+        
+        # Add conversions for original multivalued fields back to pipe-delimited strings
+        edge_table_info = db.sql("DESCRIBE denormalized_edges").fetchall()
+        edge_table_column_names = [col[0] for col in edge_table_info]
+        edge_table_types = {col[0]: col[1] for col in edge_table_info}
+        
+        multivalued_replacements = [
+            f"list_aggregate({field}, 'string_agg', '|') as {field}"
+            for field in multivalued_fields 
+            if field in edge_table_column_names and 'VARCHAR[]' in edge_table_types[field].upper()
+        ]
+        
+        all_replacements = edge_closure_replacements + multivalued_replacements
+        edge_closure_replacements = "REPLACE (\n" + ",\n".join(all_replacements) + ")\n"
 
         edges_export_query = f"""
         -- write denormalized_edges as tsv
@@ -179,10 +247,29 @@ def add_closure(kg_archive: str,
         db.sql(edges_export_query)
 
         db.sql(nodes_query)
-        nodes_export_query = f"""
-        -- write denormalized_nodes as tsv
-        copy (select * from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
-        """
+        
+        # Convert multivalued fields back to pipe-delimited strings for nodes export
+        nodes_table_info = db.sql("DESCRIBE denormalized_nodes").fetchall()
+        nodes_table_column_names = [col[0] for col in nodes_table_info]
+        nodes_table_types = {col[0]: col[1] for col in nodes_table_info}
+        
+        nodes_multivalued_replacements = [
+            f"list_aggregate({field}, 'string_agg', '|') as {field}"
+            for field in multivalued_fields 
+            if field in nodes_table_column_names and 'VARCHAR[]' in nodes_table_types[field].upper()
+        ]
+        
+        if nodes_multivalued_replacements:
+            nodes_replacements = "REPLACE (\n" + ",\n".join(nodes_multivalued_replacements) + ")\n"
+            nodes_export_query = f"""
+            -- write denormalized_nodes as tsv
+            copy (select * {nodes_replacements} from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
+            """
+        else:
+            nodes_export_query = f"""
+            -- write denormalized_nodes as tsv
+            copy (select * from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
+            """
         print(nodes_export_query)
         db.sql(nodes_export_query)
 
