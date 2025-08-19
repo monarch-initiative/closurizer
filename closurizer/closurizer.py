@@ -203,10 +203,10 @@ def prepare_multivalued_fields(db, multivalued_fields: List[str]):
             """)
 
 
-def add_closure(kg_archive: Optional[str],
-                closure_file: str,
+def add_closure(closure_file: str,
                 nodes_output_file: str,
                 edges_output_file: str,
+                kg_archive: Optional[str] = None,
                 input_database: Optional[str] = None,
                 database_path: str = 'monarch-kg.duckdb',
                 node_fields: List[str] = [],
@@ -218,6 +218,12 @@ def add_closure(kg_archive: Optional[str],
                 grouping_fields: List[str] = ['subject', 'negated', 'predicate', 'object'],
                 multivalued_fields: List[str] = ['has_evidence', 'publications', 'in_taxon', 'in_taxon_label']
                 ):
+    # Validate input parameters
+    if not kg_archive and not input_database:
+        raise ValueError("Either kg_archive or input_database must be specified")
+    if kg_archive and input_database:
+        raise ValueError("kg_archive and input_database are mutually exclusive - specify only one")
+    
     print("Generating closure KG...")
     if kg_archive:
         print(f"kg_archive: {kg_archive}")
