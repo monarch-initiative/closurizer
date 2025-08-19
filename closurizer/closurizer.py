@@ -207,8 +207,8 @@ def add_closure(closure_file: str,
         else:
             # Database already exists and contains data
             # Check if namespace column exists, add it if needed
-            node_columns = [col[0] for col in db.sql("DESCRIBE nodes").fetchall()]
-            if 'namespace' not in node_columns:
+            node_column_names = [col[0] for col in db.sql("DESCRIBE nodes").fetchall()]
+            if 'namespace' not in node_column_names:
                 print("Adding namespace column to nodes table...")
                 db.sql("ALTER TABLE nodes ADD COLUMN namespace VARCHAR")
                 db.sql("UPDATE nodes SET namespace = substr(id, 1, instr(id,':') -1)")
