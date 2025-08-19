@@ -84,39 +84,6 @@ def grouping_key(grouping_fields):
     return f"concat_ws('|', {grouping_key_fragments}) as grouping_key"
 
 
-def load_from_database(input_database_path: str, output_db, multivalued_fields: List[str]):
-    """Load nodes and edges tables from an existing database into output database"""
-    
-    # Attach the input database
-    output_db.sql(f"ATTACH DATABASE '{input_database_path}' AS input_db")
-    
-    # Check that required tables exist
-    # Switch to the input database context to list tables
-    output_db.sql("USE input_db")
-    tables = [row[0] for row in output_db.sql("SHOW TABLES").fetchall()]
-    output_db.sql("USE main")  # Switch back to main database
-    
-    if 'nodes' not in tables:
-        raise ValueError("Input database must contain a 'nodes' table")
-    if 'edges' not in tables:
-        raise ValueError("Input database must contain an 'edges' table")
-    
-    print("Copying nodes table from input database...")
-    # Copy nodes table with namespace calculation
-    output_db.sql("""
-    create or replace table nodes as 
-    select *, substr(id, 1, instr(id,':') -1) as namespace 
-    from input_db.nodes
-    """)
-    
-    print("Copying edges table from input database...")
-    # Copy edges table
-    output_db.sql("create or replace table edges as select * from input_db.edges")
-    
-    # No need to detach - database connection will be closed when function completes
-    
-    # Convert multivalued fields to arrays
-    prepare_multivalued_fields(output_db, multivalued_fields)
 
 
 def load_from_archive(kg_archive: str, db, multivalued_fields: List[str]):
@@ -207,7 +174,6 @@ def add_closure(closure_file: str,
                 nodes_output_file: str,
                 edges_output_file: str,
                 kg_archive: Optional[str] = None,
-                input_database: Optional[str] = None,
                 database_path: str = 'monarch-kg.duckdb',
                 node_fields: List[str] = [],
                 edge_fields: List[str] = ['subject', 'object'],
@@ -219,20 +185,16 @@ def add_closure(closure_file: str,
                 multivalued_fields: List[str] = ['has_evidence', 'publications', 'in_taxon', 'in_taxon_label']
                 ):
     # Validate input parameters
-    if not kg_archive and not input_database:
-        raise ValueError("Either kg_archive or input_database must be specified")
-    if kg_archive and input_database:
-        raise ValueError("kg_archive and input_database are mutually exclusive - specify only one")
+    if not kg_archive and not os.path.exists(database_path):
+        raise ValueError("Either kg_archive must be specified or database_path must exist")
     
     print("Generating closure KG...")
     if kg_archive:
         print(f"kg_archive: {kg_archive}")
-    if input_database:
-        print(f"input_database: {input_database}")
     print(f"database_path: {database_path}")
     print(f"closure_file: {closure_file}")
 
-    # Connect to output database
+    # Connect to database
     db = duckdb.connect(database=database_path)
 
     if not dry_run:
@@ -240,10 +202,19 @@ def add_closure(closure_file: str,
         print(f"output_file: {edges_output_file}")
 
         # Load data based on input method
-        if input_database:
-            load_from_database(input_database, db, multivalued_fields)
-        else:
+        if kg_archive:
             load_from_archive(kg_archive, db, multivalued_fields)
+        else:
+            # Database already exists and contains data
+            # Check if namespace column exists, add it if needed
+            node_columns = [col[0] for col in db.sql("DESCRIBE nodes").fetchall()]
+            if 'namespace' not in node_columns:
+                print("Adding namespace column to nodes table...")
+                db.sql("ALTER TABLE nodes ADD COLUMN namespace VARCHAR")
+                db.sql("UPDATE nodes SET namespace = substr(id, 1, instr(id,':') -1)")
+            
+            # Convert multivalued fields to arrays
+            prepare_multivalued_fields(db, multivalued_fields)
 
         # Load the relation graph tsv in long format mapping a node to each of it's ancestors
         db.sql(f"""

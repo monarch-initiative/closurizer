@@ -66,12 +66,12 @@ def test_module_usage_database_input():
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         
-        # Create input database
-        input_db_path = temp_path / "input.duckdb"
-        input_db = duckdb.connect(str(input_db_path))
+        # Create working database
+        db_path = temp_path / "working.duckdb"
+        db = duckdb.connect(str(db_path))
         
         # Create test data
-        input_db.sql("""
+        db.sql("""
         CREATE TABLE nodes (
             id VARCHAR,
             name VARCHAR, 
@@ -80,13 +80,13 @@ def test_module_usage_database_input():
             in_taxon_label VARCHAR
         )
         """)
-        input_db.sql("""
+        db.sql("""
         INSERT INTO nodes VALUES
             ('X:1', 'x1', 'Gene', 'NCBITaxon:9606', 'human'),
             ('Y:1', 'y1', 'Disease', NULL, NULL)
         """)
         
-        input_db.sql("""
+        db.sql("""
         CREATE TABLE edges (
             subject VARCHAR,
             predicate VARCHAR,
@@ -96,12 +96,12 @@ def test_module_usage_database_input():
             negated BOOLEAN
         )
         """)
-        input_db.sql("""
+        db.sql("""
         INSERT INTO edges VALUES
             ('X:1', 'biolink:related_to', 'Y:1', 'ECO:1', 'PMID:1', false)
         """)
         
-        input_db.close()
+        db.close()
         
         # Create closure file
         closure_file = temp_path / "closure.tsv"
@@ -110,21 +110,19 @@ def test_module_usage_database_input():
         # Output files  
         nodes_output = temp_path / "nodes_out.tsv"
         edges_output = temp_path / "edges_out.tsv"
-        output_db = temp_path / "output.duckdb"
         
-        # Test module usage with database input
+        # Test module usage with database input (no kg_archive = use existing database)
         add_closure(
             closure_file=str(closure_file),
             nodes_output_file=str(nodes_output),
             edges_output_file=str(edges_output),
-            input_database=str(input_db_path),
-            database_path=str(output_db)
+            database_path=str(db_path)
         )
         
         # Verify outputs were created
         assert nodes_output.exists()
         assert edges_output.exists()
-        assert output_db.exists()
+        assert db_path.exists()
         
         # Verify content
         edges_content = edges_output.read_text()
@@ -135,22 +133,13 @@ def test_module_usage_database_input():
 def test_module_parameter_validation():
     """Test parameter validation for module usage"""
     
-    # Test missing both parameters
-    with pytest.raises(ValueError, match="Either kg_archive or input_database must be specified"):
+    # Test missing kg_archive with non-existent database
+    with pytest.raises(ValueError, match="Either kg_archive must be specified or database_path must exist"):
         add_closure(
             closure_file="test.tsv",
             nodes_output_file="nodes.tsv", 
-            edges_output_file="edges.tsv"
-        )
-    
-    # Test both parameters provided
-    with pytest.raises(ValueError, match="kg_archive and input_database are mutually exclusive"):
-        add_closure(
-            closure_file="test.tsv",
-            nodes_output_file="nodes.tsv",
             edges_output_file="edges.tsv",
-            kg_archive="archive.tar.gz",
-            input_database="database.duckdb"
+            database_path="nonexistent.duckdb"
         )
 
 

@@ -12,12 +12,12 @@ def test_database_input_functionality():
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         
-        # Create an input database with nodes and edges tables
-        input_db_path = temp_path / "input.duckdb"
-        input_db = duckdb.connect(str(input_db_path))
+        # Create a working database with nodes and edges tables
+        working_db_path = temp_path / "working.duckdb"
+        working_db = duckdb.connect(str(working_db_path))
         
         # Create test nodes table
-        input_db.sql("""
+        working_db.sql("""
         CREATE TABLE nodes (
             id VARCHAR,
             name VARCHAR,
@@ -26,7 +26,7 @@ def test_database_input_functionality():
             in_taxon_label VARCHAR
         )
         """)
-        input_db.sql("""
+        working_db.sql("""
         INSERT INTO nodes VALUES
             ('X:1', 'x1', 'Gene', 'NCBITaxon:9606', 'human'),
             ('X:2', 'x2', 'Gene', 'NCBITaxon:9606', 'human'),
@@ -34,7 +34,7 @@ def test_database_input_functionality():
         """)
         
         # Create test edges table  
-        input_db.sql("""
+        working_db.sql("""
         CREATE TABLE edges (
             subject VARCHAR,
             predicate VARCHAR,
@@ -44,13 +44,13 @@ def test_database_input_functionality():
             negated BOOLEAN
         )
         """)
-        input_db.sql("""
+        working_db.sql("""
         INSERT INTO edges VALUES
             ('X:1', 'biolink:related_to', 'Y:1', 'ECO:1|ECO:2', 'PMID:1|PMID:2', false),
             ('X:2', 'biolink:related_to', 'Y:1', 'ECO:1', 'PMID:1', false)
         """)
         
-        input_db.close()
+        working_db.close()
         
         # Create closure file
         closure_content = """X:1	rdfs:subClassOf	X:2
@@ -61,13 +61,11 @@ X:2	rdfs:subClassOf	Y:1"""
         # Output files
         nodes_output = temp_path / "nodes_output.tsv"
         edges_output = temp_path / "edges_output.tsv"
-        output_db_path = temp_path / "output.duckdb"
         
-        # Run closurizer with database input
+        # Run closurizer with database input (no --kg means use existing database)
         runner = CliRunner()
         result = runner.invoke(main, [
-            "--input-db", str(input_db_path),
-            "--database", str(output_db_path),
+            "--database", str(working_db_path),
             "--closure", str(closure_file),
             "--nodes-output", str(nodes_output),
             "--edges-output", str(edges_output),
@@ -87,7 +85,7 @@ X:2	rdfs:subClassOf	Y:1"""
         # Verify output files were created
         assert nodes_output.exists()
         assert edges_output.exists()
-        assert output_db_path.exists()
+        assert working_db_path.exists()
         
         # Verify TSV export contains pipe-delimited strings (this tests the core functionality)
         edges_output_content = edges_output.read_text()
@@ -101,24 +99,24 @@ X:2	rdfs:subClassOf	Y:1"""
 
 
 def test_database_input_missing_tables():
-    """Test error handling when input database is missing required tables"""
+    """Test error handling when database is missing required tables"""
     
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         
-        # Create an input database with only nodes table (missing edges)
-        input_db_path = temp_path / "input_incomplete.duckdb"
-        input_db = duckdb.connect(str(input_db_path))
+        # Create a database with only nodes table (missing edges)
+        incomplete_db_path = temp_path / "incomplete.duckdb"
+        incomplete_db = duckdb.connect(str(incomplete_db_path))
         
         # Create only nodes table
-        input_db.sql("""
+        incomplete_db.sql("""
         CREATE TABLE nodes (id VARCHAR, name VARCHAR, category VARCHAR)
         """)
-        input_db.sql("""
+        incomplete_db.sql("""
         INSERT INTO nodes VALUES ('X:1', 'x1', 'Gene')
         """)
         
-        input_db.close()
+        incomplete_db.close()
         
         # Create minimal closure file
         closure_file = temp_path / "closure.tsv"
@@ -131,40 +129,30 @@ def test_database_input_missing_tables():
         # Run closurizer with incomplete database
         runner = CliRunner()
         result = runner.invoke(main, [
-            "--input-db", str(input_db_path),
+            "--database", str(incomplete_db_path),
             "--closure", str(closure_file),
             "--nodes-output", str(nodes_output),
             "--edges-output", str(edges_output)
         ])
         
         assert result.exit_code != 0
-        assert "edges" in result.output.lower() or "ValueError" in str(result.exception)
+        assert "edges" in result.output.lower() or "ERROR" in result.output
 
 
-def test_mutually_exclusive_inputs():
-    """Test that --kg and --input-db are mutually exclusive"""
+def test_missing_database_with_no_archive():
+    """Test error handling when no --kg is provided and database doesn't exist"""
     
     runner = CliRunner()
     
-    # Test both options provided
+    # Test with non-existent database path and no --kg
     result = runner.invoke(main, [
-        "--kg", "test.tar.gz", 
-        "--input-db", "test.duckdb",
-        "--closure", "closure.tsv",
-        "--nodes-output", "nodes.tsv",
-        "--edges-output", "edges.tsv"
-    ])
-    assert result.exit_code == 2  # Click usage error
-    assert "mutually exclusive" in result.output
-    
-    # Test neither option provided
-    result = runner.invoke(main, [
+        "--database", "nonexistent.duckdb",
         "--closure", "closure.tsv",
         "--nodes-output", "nodes.tsv", 
         "--edges-output", "edges.tsv"
     ])
-    assert result.exit_code == 2  # Click usage error
-    assert "Either --kg or --input-db must be specified" in result.output
+    assert result.exit_code != 0
+    assert "must be specified or database_path must exist" in result.output or "ERROR" in result.output
 
 
 def test_custom_database_path():
@@ -173,29 +161,26 @@ def test_custom_database_path():
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         
-        # Create input database  
-        input_db_path = temp_path / "input.duckdb"
-        input_db = duckdb.connect(str(input_db_path))
+        # Create working database  
+        working_db_path = temp_path / "my-custom-database.duckdb"
+        working_db = duckdb.connect(str(working_db_path))
         
         # Create minimal test data with required fields
-        input_db.sql("""
+        working_db.sql("""
         CREATE TABLE nodes (id VARCHAR, name VARCHAR, category VARCHAR, in_taxon VARCHAR, in_taxon_label VARCHAR)
         """)
-        input_db.sql("""INSERT INTO nodes VALUES ('X:1', 'x1', 'Gene', 'NCBITaxon:9606', 'human')""")
+        working_db.sql("""INSERT INTO nodes VALUES ('X:1', 'x1', 'Gene', 'NCBITaxon:9606', 'human')""")
         
-        input_db.sql("""
+        working_db.sql("""
         CREATE TABLE edges (subject VARCHAR, predicate VARCHAR, object VARCHAR, has_evidence VARCHAR, publications VARCHAR, negated BOOLEAN)
         """)
-        input_db.sql("""INSERT INTO edges VALUES ('X:1', 'biolink:related_to', 'X:1', 'ECO:1', 'PMID:1', false)""")
+        working_db.sql("""INSERT INTO edges VALUES ('X:1', 'biolink:related_to', 'X:1', 'ECO:1', 'PMID:1', false)""")
         
-        input_db.close()
+        working_db.close()
         
         # Create closure file
         closure_file = temp_path / "closure.tsv"
         closure_file.write_text("X:1\trdfs:subClassOf\tX:1")
-        
-        # Custom database path
-        custom_db_path = temp_path / "my-custom-database.duckdb"
         
         # Output files
         nodes_output = temp_path / "nodes.tsv"
@@ -204,12 +189,11 @@ def test_custom_database_path():
         # Run with custom database path
         runner = CliRunner()
         result = runner.invoke(main, [
-            "--input-db", str(input_db_path),
-            "--database", str(custom_db_path),
+            "--database", str(working_db_path),
             "--closure", str(closure_file),
             "--nodes-output", str(nodes_output),
             "--edges-output", str(edges_output)
         ])
         
         assert result.exit_code == 0, f"Command failed: {result.output}"
-        assert custom_db_path.exists(), "Custom database path should be created"
+        assert working_db_path.exists(), "Custom database path should exist"

@@ -14,6 +14,7 @@ add_closure(
     nodes_output_file="output/nodes-with-closures.tsv", 
     edges_output_file="output/edges-denormalized.tsv",
     kg_archive="my-kg.tar.gz",
+    database_path="working-database.duckdb",  # database where processing occurs
     edge_fields=["subject", "object"]
 )
 ```
@@ -26,8 +27,7 @@ add_closure(
     closure_file="my-relations-non-redundant.tsv",
     nodes_output_file="output/nodes-with-closures.tsv",
     edges_output_file="output/edges-denormalized.tsv", 
-    input_database="existing-kg.duckdb",
-    database_path="output/processed-kg.duckdb",  # optional output database
+    database_path="existing-kg.duckdb",  # existing database with nodes/edges tables
     edge_fields=["subject", "object"]
 )
 ```
@@ -36,13 +36,15 @@ add_closure(
 
 **Archive input:**
 ```bash
-closurizer --kg my-kg.tar.gz --closure relations.tsv --nodes-output nodes.tsv --edges-output edges.tsv
+closurizer --kg my-kg.tar.gz --database working.duckdb --closure relations.tsv --nodes-output nodes.tsv --edges-output edges.tsv
 ```
 
 **Database input:**
 ```bash
-closurizer --input-db existing.duckdb --closure relations.tsv --nodes-output nodes.tsv --edges-output edges.tsv
+closurizer --database existing.duckdb --closure relations.tsv --nodes-output nodes.tsv --edges-output edges.tsv
 ```
+
+Note: If `--kg` is provided, the archive will be loaded into the specified database. If `--kg` is not provided, the database must already exist and contain `nodes` and `edges` tables.
 
 
 ## Example
