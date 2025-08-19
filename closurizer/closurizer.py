@@ -274,10 +274,17 @@ def add_closure(closure_file: str,
         edge_table_column_names = [col[0] for col in edge_table_info]
         edge_table_types = {col[0]: col[1] for col in edge_table_info}
         
+        # Create set of closure fields already handled by edge_closure_replacements
+        closure_fields_handled = set()
+        for field in edge_fields:
+            closure_fields_handled.add(f"{field}_closure")
+            closure_fields_handled.add(f"{field}_closure_label")
+        
         multivalued_replacements = [
             f"list_aggregate({field}, 'string_agg', '|') as {field}"
             for field in multivalued_fields 
             if field in edge_table_column_names and 'VARCHAR[]' in edge_table_types[field].upper()
+            and field not in closure_fields_handled
         ]
         
         all_replacements = edge_closure_replacements + multivalued_replacements
