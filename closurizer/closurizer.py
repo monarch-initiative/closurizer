@@ -126,9 +126,18 @@ def prepare_multivalued_fields(db, multivalued_fields: List[str]):
     """Convert specified fields to varchar[] arrays in both nodes and edges tables"""
     
     # Convert multivalued fields in nodes table to varchar[] arrays
-    node_column_names = [col[0] for col in db.sql("DESCRIBE nodes").fetchall()]
+    nodes_table_info = db.sql("DESCRIBE nodes").fetchall()
+    node_column_names = [col[0] for col in nodes_table_info]
+    node_column_types = {col[0]: col[1] for col in nodes_table_info}
+    
     for field in multivalued_fields:
         if field in node_column_names:
+            # Check if field is already VARCHAR[] - if so, skip conversion
+            if 'VARCHAR[]' in node_column_types[field].upper():
+                print(f"Field '{field}' in nodes table is already VARCHAR[], skipping conversion")
+                continue
+                
+            print(f"Converting field '{field}' in nodes table to VARCHAR[]")
             # Create a new column with proper array type and replace the original
             db.sql(f"""
             alter table nodes add column {field}_array VARCHAR[]
@@ -148,9 +157,18 @@ def prepare_multivalued_fields(db, multivalued_fields: List[str]):
             """)
 
     # Convert multivalued fields in edges table to varchar[] arrays
-    edge_column_names = [col[0] for col in db.sql("DESCRIBE edges").fetchall()]
+    edges_table_info = db.sql("DESCRIBE edges").fetchall()
+    edge_column_names = [col[0] for col in edges_table_info]
+    edge_column_types = {col[0]: col[1] for col in edges_table_info}
+    
     for field in multivalued_fields:
         if field in edge_column_names:
+            # Check if field is already VARCHAR[] - if so, skip conversion
+            if 'VARCHAR[]' in edge_column_types[field].upper():
+                print(f"Field '{field}' in edges table is already VARCHAR[], skipping conversion")
+                continue
+                
+            print(f"Converting field '{field}' in edges table to VARCHAR[]")
             # Create a new column with proper array type and replace the original
             db.sql(f"""
             alter table edges add column {field}_array VARCHAR[]
@@ -245,14 +263,32 @@ def add_closure(closure_file: str,
     print(edges_query)
 
     additional_node_constraints = f"where {additional_node_constraints}" if additional_node_constraints else ""
+    
+    # Get nodes table info to handle multivalued fields in the query
+    nodes_table_info = db.sql("DESCRIBE nodes").fetchall()
+    nodes_table_column_names = [col[0] for col in nodes_table_info]
+    nodes_table_types = {col[0]: col[1] for col in nodes_table_info}
+    
+    # Create field selections for nodes, converting VARCHAR[] back to pipe-delimited strings
+    nodes_field_selections = []
+    for field in nodes_table_column_names:
+        if field in multivalued_fields and 'VARCHAR[]' in nodes_table_types[field].upper():
+            # Convert VARCHAR[] back to pipe-delimited string
+            nodes_field_selections.append(f"list_aggregate({field}, 'string_agg', '|') as {field}")
+        else:
+            # Regular field, use as-is (but need to specify for GROUP BY)
+            nodes_field_selections.append(f"nodes.{field}")
+    
+    nodes_base_fields = ",\n        ".join(nodes_field_selections)
+    
     nodes_query = f"""        
     create or replace table denormalized_nodes as
-    select nodes.*, 
+    select {nodes_base_fields}, 
         {"".join([node_columns(node_field) for node_field in node_fields])}
     from nodes
         {node_joins('has_phenotype')}
     {additional_node_constraints}
-    group by nodes.*
+    group by {", ".join([f"nodes.{field}" for field in nodes_table_column_names])}
     """
     print(nodes_query)
 
@@ -299,27 +335,10 @@ def add_closure(closure_file: str,
 
         db.sql(nodes_query)
         
-        # Convert multivalued fields back to pipe-delimited strings for nodes export
-        nodes_table_info = db.sql("DESCRIBE denormalized_nodes").fetchall()
-        nodes_table_column_names = [col[0] for col in nodes_table_info]
-        nodes_table_types = {col[0]: col[1] for col in nodes_table_info}
-        
-        nodes_multivalued_replacements = [
-            f"list_aggregate({field}, 'string_agg', '|') as {field}"
-            for field in multivalued_fields 
-            if field in nodes_table_column_names and 'VARCHAR[]' in nodes_table_types[field].upper()
-        ]
-        
-        if nodes_multivalued_replacements:
-            nodes_replacements = "REPLACE (\n" + ",\n".join(nodes_multivalued_replacements) + ")\n"
-            nodes_export_query = f"""
-            -- write denormalized_nodes as tsv
-            copy (select * {nodes_replacements} from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
-            """
-        else:
-            nodes_export_query = f"""
-            -- write denormalized_nodes as tsv
-            copy (select * from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
-            """
+        # Export denormalized_nodes directly (multivalued fields already converted during creation)
+        nodes_export_query = f"""
+        -- write denormalized_nodes as tsv
+        copy (select * from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
+        """
         print(nodes_export_query)
         db.sql(nodes_export_query)
