@@ -50,11 +50,11 @@ def node_columns(predicate):
     field = predicate.replace('biolink:','')
 
     return f"""
-    string_agg({field}_edges.object, '|') as {field},
-    string_agg({field}_edges.object_label, '|') as {field}_label,
+    array_agg(distinct {field}_edges.object) as {field},
+    array_agg(distinct {field}_edges.object_label) as {field}_label,
     count (distinct {field}_edges.object) as {field}_count,
-    list_aggregate(list_distinct(flatten(array_agg({field}_closure.closure))), 'string_agg', '|') as {field}_closure,
-    list_aggregate(list_distinct(flatten(array_agg({field}_closure_label.closure_label))), 'string_agg', '|') as {field}_closure_label,
+    list_distinct(flatten(array_agg({field}_closure.closure))) as {field}_closure,
+    list_distinct(flatten(array_agg({field}_closure_label.closure_label))) as {field}_closure_label,
     """
 
 def node_joins(predicate):
@@ -335,10 +335,28 @@ def add_closure(closure_file: str,
 
         db.sql(nodes_query)
         
-        # Export denormalized_nodes directly (multivalued fields already converted during creation)
-        nodes_export_query = f"""
-        -- write denormalized_nodes as tsv
-        copy (select * from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
-        """
+        # Get denormalized_nodes table info to handle array fields in export
+        denorm_nodes_table_info = db.sql("DESCRIBE denormalized_nodes").fetchall()
+        denorm_nodes_column_names = [col[0] for col in denorm_nodes_table_info]
+        denorm_nodes_types = {col[0]: col[1] for col in denorm_nodes_table_info}
+        
+        # Find all VARCHAR[] fields that need conversion to pipe-delimited strings
+        array_field_replacements = [
+            f"list_aggregate({field}, 'string_agg', '|') as {field}"
+            for field in denorm_nodes_column_names 
+            if 'VARCHAR[]' in denorm_nodes_types[field].upper()
+        ]
+        
+        if array_field_replacements:
+            nodes_replacements = "REPLACE (\n" + ",\n".join(array_field_replacements) + ")\n"
+            nodes_export_query = f"""
+            -- write denormalized_nodes as tsv
+            copy (select * {nodes_replacements} from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
+            """
+        else:
+            nodes_export_query = f"""
+            -- write denormalized_nodes as tsv
+            copy (select * from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
+            """
         print(nodes_export_query)
         db.sql(nodes_export_query)
