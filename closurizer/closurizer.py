@@ -50,11 +50,11 @@ def node_columns(predicate):
     field = predicate.replace('biolink:','')
 
     return f"""
-    array_agg(distinct {field}_edges.object) as {field},
-    array_agg(distinct {field}_edges.object_label) as {field}_label,
+    case when count(distinct {field}_edges.object) > 0 then array_agg(distinct {field}_edges.object) else null end as {field},
+    case when count(distinct {field}_edges.object_label) > 0 then array_agg(distinct {field}_edges.object_label) else null end as {field}_label,
     count (distinct {field}_edges.object) as {field}_count,
-    list_distinct(flatten(array_agg({field}_closure.closure))) as {field}_closure,
-    list_distinct(flatten(array_agg({field}_closure_label.closure_label))) as {field}_closure_label,
+    case when count({field}_closure.closure) > 0 then list_distinct(flatten(array_agg({field}_closure.closure))) else null end as {field}_closure,
+    case when count({field}_closure_label.closure_label) > 0 then list_distinct(flatten(array_agg({field}_closure_label.closure_label))) else null end as {field}_closure_label,
     """
 
 def node_joins(predicate):
