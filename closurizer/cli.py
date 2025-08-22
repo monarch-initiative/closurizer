@@ -17,6 +17,8 @@ from closurizer.closurizer import add_closure
 @click.option('--grouping-fields', multiple=True, help='fields to populate a single value grouping_key field')
 @click.option('--multivalued-fields', multiple=True, help='fields containing pipe-delimited values to convert to varchar[] arrays in database')
 @click.option('--dry-run', is_flag=True, help='A dry run will not write the output file, but will print the SQL query')
+@click.option('--export-edges', is_flag=True, help='Export denormalized edges to TSV file (default: database only)')
+@click.option('--export-nodes', is_flag=True, help='Export denormalized nodes to TSV file (default: database only)')
 def main(kg: str,
          database: str,
          closure: str,
@@ -28,7 +30,9 @@ def main(kg: str,
          edge_fields_to_label: List[str] = None,
          node_fields: List[str] = None,
          grouping_fields: List[str] = None,
-         multivalued_fields: List[str] = None):
+         multivalued_fields: List[str] = None,
+         export_edges: bool = False,
+         export_nodes: bool = False):
     
     add_closure(closure_file=closure,
                 nodes_output_file=nodes_output,
@@ -41,7 +45,9 @@ def main(kg: str,
                 additional_node_constraints=additional_node_constraints,
                 dry_run=dry_run,
                 grouping_fields=grouping_fields or ['subject', 'negated', 'predicate', 'object'],
-                multivalued_fields=multivalued_fields or ['has_evidence', 'publications', 'in_taxon', 'in_taxon_label'])
+                multivalued_fields=multivalued_fields or ['has_evidence', 'publications', 'in_taxon', 'in_taxon_label'],
+                export_edges=export_edges,
+                export_nodes=export_nodes)
 
 if __name__ == "__main__":
     main()

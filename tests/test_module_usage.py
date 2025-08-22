@@ -47,7 +47,9 @@ X:1	biolink:related_to	Y:1	ECO:1	PMID:1	False
             closure_file=str(closure_file),
             nodes_output_file=str(nodes_output),
             edges_output_file=str(edges_output),
-            kg_archive=str(archive_path)
+            kg_archive=str(archive_path),
+            export_edges=True,
+            export_nodes=True
         )
         
         # Verify outputs were created
@@ -116,7 +118,9 @@ def test_module_usage_database_input():
             closure_file=str(closure_file),
             nodes_output_file=str(nodes_output),
             edges_output_file=str(edges_output),
-            database_path=str(db_path)
+            database_path=str(db_path),
+            export_edges=True,
+            export_nodes=True
         )
         
         # Verify outputs were created
@@ -174,7 +178,9 @@ def test_backward_compatibility_positional_args():
             str(closure_file),      # closure_file
             str(nodes_output),      # nodes_output_file
             str(edges_output),      # edges_output_file
-            str(archive_path)       # kg_archive
+            str(archive_path),      # kg_archive
+            export_edges=True,
+            export_nodes=True
         )
         
         assert nodes_output.exists()

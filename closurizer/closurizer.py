@@ -211,7 +211,9 @@ def add_closure(closure_file: str,
                 dry_run: bool  = False,
                 evidence_fields: List[str] = ['has_evidence', 'publications'],
                 grouping_fields: List[str] = ['subject', 'negated', 'predicate', 'object'],
-                multivalued_fields: List[str] = ['has_evidence', 'publications', 'in_taxon', 'in_taxon_label']
+                multivalued_fields: List[str] = ['has_evidence', 'publications', 'in_taxon', 'in_taxon_label'],
+                export_edges: bool = False,
+                export_nodes: bool = False
                 ):
     # Validate input parameters
     if not kg_archive and not os.path.exists(database_path):
@@ -323,66 +325,70 @@ def add_closure(closure_file: str,
 
         db.sql(edges_query)
 
-        edge_closure_replacements = [
-            f"""
-            list_aggregate({field}_closure, 'string_agg', '|') as {field}_closure,
-            list_aggregate({field}_closure_label, 'string_agg', '|') as {field}_closure_label
-            """
-            for field in edge_fields
-        ]
-        
-        # Add conversions for original multivalued fields back to pipe-delimited strings
-        edge_table_info = db.sql("DESCRIBE denormalized_edges").fetchall()
-        edge_table_column_names = [col[0] for col in edge_table_info]
-        edge_table_types = {col[0]: col[1] for col in edge_table_info}
-        
-        # Create set of closure fields already handled by edge_closure_replacements
-        closure_fields_handled = set()
-        for field in edge_fields:
-            closure_fields_handled.add(f"{field}_closure")
-            closure_fields_handled.add(f"{field}_closure_label")
-        
-        multivalued_replacements = [
-            f"list_aggregate({field}, 'string_agg', '|') as {field}"
-            for field in multivalued_fields 
-            if field in edge_table_column_names and 'VARCHAR[]' in edge_table_types[field].upper()
-            and field not in closure_fields_handled
-        ]
-        
-        all_replacements = edge_closure_replacements + multivalued_replacements
-        edge_closure_replacements = "REPLACE (\n" + ",\n".join(all_replacements) + ")\n"
+        # Export edges to TSV only if requested
+        if export_edges:
+            edge_closure_replacements = [
+                f"""
+                list_aggregate({field}_closure, 'string_agg', '|') as {field}_closure,
+                list_aggregate({field}_closure_label, 'string_agg', '|') as {field}_closure_label
+                """
+                for field in edge_fields
+            ]
+            
+            # Add conversions for original multivalued fields back to pipe-delimited strings
+            edge_table_info = db.sql("DESCRIBE denormalized_edges").fetchall()
+            edge_table_column_names = [col[0] for col in edge_table_info]
+            edge_table_types = {col[0]: col[1] for col in edge_table_info}
+            
+            # Create set of closure fields already handled by edge_closure_replacements
+            closure_fields_handled = set()
+            for field in edge_fields:
+                closure_fields_handled.add(f"{field}_closure")
+                closure_fields_handled.add(f"{field}_closure_label")
+            
+            multivalued_replacements = [
+                f"list_aggregate({field}, 'string_agg', '|') as {field}"
+                for field in multivalued_fields 
+                if field in edge_table_column_names and 'VARCHAR[]' in edge_table_types[field].upper()
+                and field not in closure_fields_handled
+            ]
+            
+            all_replacements = edge_closure_replacements + multivalued_replacements
+            edge_closure_replacements = "REPLACE (\n" + ",\n".join(all_replacements) + ")\n"
 
-        edges_export_query = f"""
-        -- write denormalized_edges as tsv
-        copy (select * {edge_closure_replacements} from denormalized_edges) to '{edges_output_file}' (header, delimiter '\t')
-        """
-        print(edges_export_query)
-        db.sql(edges_export_query)
+            edges_export_query = f"""
+            -- write denormalized_edges as tsv
+            copy (select * {edge_closure_replacements} from denormalized_edges) to '{edges_output_file}' (header, delimiter '\t')
+            """
+            print(edges_export_query)
+            db.sql(edges_export_query)
 
         db.sql(nodes_query)
         
-        # Get denormalized_nodes table info to handle array fields in export
-        denorm_nodes_table_info = db.sql("DESCRIBE denormalized_nodes").fetchall()
-        denorm_nodes_column_names = [col[0] for col in denorm_nodes_table_info]
-        denorm_nodes_types = {col[0]: col[1] for col in denorm_nodes_table_info}
-        
-        # Find all VARCHAR[] fields that need conversion to pipe-delimited strings
-        array_field_replacements = [
-            f"list_aggregate({field}, 'string_agg', '|') as {field}"
-            for field in denorm_nodes_column_names 
-            if 'VARCHAR[]' in denorm_nodes_types[field].upper()
-        ]
-        
-        if array_field_replacements:
-            nodes_replacements = "REPLACE (\n" + ",\n".join(array_field_replacements) + ")\n"
-            nodes_export_query = f"""
-            -- write denormalized_nodes as tsv
-            copy (select * {nodes_replacements} from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
-            """
-        else:
-            nodes_export_query = f"""
-            -- write denormalized_nodes as tsv
-            copy (select * from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
-            """
-        print(nodes_export_query)
-        db.sql(nodes_export_query)
+        # Export nodes to TSV only if requested
+        if export_nodes:
+            # Get denormalized_nodes table info to handle array fields in export
+            denorm_nodes_table_info = db.sql("DESCRIBE denormalized_nodes").fetchall()
+            denorm_nodes_column_names = [col[0] for col in denorm_nodes_table_info]
+            denorm_nodes_types = {col[0]: col[1] for col in denorm_nodes_table_info}
+            
+            # Find all VARCHAR[] fields that need conversion to pipe-delimited strings
+            array_field_replacements = [
+                f"list_aggregate({field}, 'string_agg', '|') as {field}"
+                for field in denorm_nodes_column_names 
+                if 'VARCHAR[]' in denorm_nodes_types[field].upper()
+            ]
+            
+            if array_field_replacements:
+                nodes_replacements = "REPLACE (\n" + ",\n".join(array_field_replacements) + ")\n"
+                nodes_export_query = f"""
+                -- write denormalized_nodes as tsv
+                copy (select * {nodes_replacements} from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
+                """
+            else:
+                nodes_export_query = f"""
+                -- write denormalized_nodes as tsv
+                copy (select * from denormalized_nodes) to '{nodes_output_file}' (header, delimiter '\t')
+                """
+            print(nodes_export_query)
+            db.sql(nodes_export_query)

@@ -65,7 +65,9 @@ def test_multivalued_edges_basic():
             database_path=str(db_path),
             edge_fields=['subject', 'object'],
             edge_fields_to_label=['qualifiers'],
-            multivalued_fields=['qualifiers', 'has_evidence']
+            multivalued_fields=['qualifiers', 'has_evidence'],
+            export_edges=True,
+            export_nodes=True
         )
         
         # Verify output files exist
@@ -129,7 +131,9 @@ def test_multivalued_single_value():
             edges_output_file=str(edges_output),
             database_path=str(db_path),
             edge_fields=['subject', 'object'],
-            multivalued_fields=['has_evidence', 'in_taxon']
+            multivalued_fields=['has_evidence', 'in_taxon'],
+            export_edges=True,
+            export_nodes=True
         )
         
         assert edges_output.exists()
@@ -193,7 +197,9 @@ def test_multivalued_null_values():
             edges_output_file=str(edges_output),
             database_path=str(db_path),
             edge_fields=['subject', 'object'],
-            multivalued_fields=['has_evidence', 'in_taxon']
+            multivalued_fields=['has_evidence', 'in_taxon'],
+            export_edges=True,
+            export_nodes=True
         )
         
         assert edges_output.exists()
@@ -259,7 +265,8 @@ PHENO:2\trdfs:subClassOf\tPHENO:PARENT"""
             database_path=str(db_path),
             edge_fields=['subject', 'object'],
             node_fields=['has_phenotype'],
-            multivalued_fields=[]
+            multivalued_fields=[],
+            export_nodes=True
         )
         
         assert nodes_output.exists()
@@ -320,7 +327,9 @@ def test_multivalued_empty_fields():
             edges_output_file=str(edges_output),
             database_path=str(db_path),
             edge_fields=['subject', 'object'],
-            multivalued_fields=['has_evidence', 'in_taxon']
+            multivalued_fields=['has_evidence', 'in_taxon'],
+            export_edges=True,
+            export_nodes=True
         )
         
         assert edges_output.exists()
