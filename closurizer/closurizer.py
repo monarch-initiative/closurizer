@@ -41,16 +41,12 @@ def edge_joins(field: str, include_closure_joins: bool =True, is_multivalued: bo
     
     return joins + "\n    "
 
-def evidence_sum(evidence_fields: List[str], multivalued_fields: List[str]):
-    """ Sum together the length of each field after splitting on | """
+def evidence_sum(evidence_fields: List[str]):
+    """ Sum together the length of each field - assumes fields are VARCHAR[] arrays """
     evidence_count_parts = []
     for field in evidence_fields:
-        if field in multivalued_fields:
-            # Field is already an array, use array_length
-            evidence_count_parts.append(f"ifnull(array_length({field}),0)")
-        else:
-            # Field is still string, split and count
-            evidence_count_parts.append(f"ifnull(len(split({field}, '|')),0)")
+        # All evidence fields are expected to be VARCHAR[] arrays
+        evidence_count_parts.append(f"ifnull(array_length({field}),0)")
     
     evidence_count_sum = "+".join(evidence_count_parts) if evidence_count_parts else "0"
     return f"{evidence_count_sum} as evidence_count,"
@@ -281,7 +277,7 @@ def add_closure(closure_file: str,
     select edges.*, 
            {"".join([edge_columns(field) for field in edge_fields])}
            {"".join([edge_columns(field, include_closure_fields=False) for field in edge_fields_to_label])} 
-           {evidence_sum(evidence_fields, multivalued_fields)}
+           {evidence_sum(evidence_fields)}
            {grouping_key(grouping_fields)}  
     from edges
         {"".join(edge_field_joins)}
