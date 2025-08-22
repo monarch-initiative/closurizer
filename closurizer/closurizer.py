@@ -23,12 +23,23 @@ def edge_columns(field: str, include_closure_fields: bool =True):
         """
     return column_text
 
-def edge_joins(field: str, include_closure_joins: bool =True):
-    return f"""
-    left outer join nodes as {field} on edges.{field} = {field}.id
+def edge_joins(field: str, include_closure_joins: bool =True, is_multivalued: bool = False):
+    if is_multivalued:
+        # For VARCHAR[] fields, use array containment
+        join_condition = f"{field}.id = ANY(edges.{field})"
+    else:
+        # For VARCHAR fields, use direct equality
+        join_condition = f"edges.{field} = {field}.id"
+    
+    joins = f"""
+    left outer join nodes as {field} on {join_condition}"""
+    
+    if include_closure_joins:
+        joins += f"""
     left outer join closure_id as {field}_closure on {field}.id = {field}_closure.id
-    left outer join closure_label as {field}_closure_label on {field}.id = {field}_closure_label.id
-    """
+    left outer join closure_label as {field}_closure_label on {field}.id = {field}_closure_label.id"""
+    
+    return joins + "\n    "
 
 def evidence_sum(evidence_fields: List[str], multivalued_fields: List[str]):
     """ Sum together the length of each field after splitting on | """
@@ -248,6 +259,21 @@ def add_closure(closure_file: str,
         group by subject_id
         """)
 
+    # Get edges table schema to determine which fields are VARCHAR[]
+    edges_table_info = db.sql("DESCRIBE edges").fetchall()
+    edges_table_types = {col[0]: col[1] for col in edges_table_info}
+    
+    # Build edge joins with proper multivalued field handling
+    edge_field_joins = []
+    for field in edge_fields:
+        is_multivalued = field in multivalued_fields and 'VARCHAR[]' in edges_table_types.get(field, '').upper()
+        edge_field_joins.append(edge_joins(field, is_multivalued=is_multivalued))
+    
+    edge_field_to_label_joins = []
+    for field in edge_fields_to_label:
+        is_multivalued = field in multivalued_fields and 'VARCHAR[]' in edges_table_types.get(field, '').upper()
+        edge_field_to_label_joins.append(edge_joins(field, include_closure_joins=False, is_multivalued=is_multivalued))
+    
     edges_query = f"""
     create or replace table denormalized_edges as
     select edges.*, 
@@ -256,8 +282,8 @@ def add_closure(closure_file: str,
            {evidence_sum(evidence_fields, multivalued_fields)}
            {grouping_key(grouping_fields)}  
     from edges
-        {"".join([edge_joins(field) for field in edge_fields])}
-        {"".join([edge_joins(field, include_closure_joins=False) for field in edge_fields_to_label])}
+        {"".join(edge_field_joins)}
+        {"".join(edge_field_to_label_joins)}
     """
 
     print(edges_query)
