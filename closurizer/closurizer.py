@@ -25,8 +25,8 @@ def edge_columns(field: str, include_closure_fields: bool =True):
 
 def edge_joins(field: str, include_closure_joins: bool =True, is_multivalued: bool = False):
     if is_multivalued:
-        # For VARCHAR[] fields, use array containment
-        join_condition = f"{field}.id = ANY(edges.{field})"
+        # For VARCHAR[] fields, use array containment with list_contains
+        join_condition = f"list_contains(edges.{field}, {field}.id)"
     else:
         # For VARCHAR fields, use direct equality
         join_condition = f"edges.{field} = {field}.id"
