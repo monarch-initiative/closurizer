@@ -4,7 +4,7 @@ import os
 import tarfile
 import duckdb
 
-def edge_columns(field: str, include_closure_fields: bool =True):
+def edge_columns(field: str, include_closure_fields: bool =True, node_column_names: list = None):
     column_text = f"""
        {field}.name as {field}_label, 
        {field}.category as {field}_category,
@@ -16,10 +16,15 @@ def edge_columns(field: str, include_closure_fields: bool =True):
         {field}_closure_label.closure_label as {field}_closure_label,
         """
 
-    if field in ['subject', 'object']:
-        column_text += f"""
-        {field}.in_taxon as {field}_taxon,
-        {field}.in_taxon_label as {field}_taxon_label,
+    # Only add taxon fields if they exist in the nodes table
+    if field in ['subject', 'object'] and node_column_names:
+        if 'in_taxon' in node_column_names:
+            column_text += f"""
+        {field}.in_taxon as {field}_taxon,"""
+        if 'in_taxon_label' in node_column_names:
+            column_text += f"""
+        {field}.in_taxon_label as {field}_taxon_label,"""
+        column_text += """
         """
     return column_text
 
@@ -41,12 +46,14 @@ def edge_joins(field: str, include_closure_joins: bool =True, is_multivalued: bo
     
     return joins + "\n    "
 
-def evidence_sum(evidence_fields: List[str]):
+def evidence_sum(evidence_fields: List[str], edges_column_names: list = None):
     """ Sum together the length of each field - assumes fields are VARCHAR[] arrays """
     evidence_count_parts = []
     for field in evidence_fields:
-        # All evidence fields are expected to be VARCHAR[] arrays
-        evidence_count_parts.append(f"ifnull(array_length({field}),0)")
+        # Only include fields that actually exist in the edges table
+        if not edges_column_names or field in edges_column_names:
+            # All evidence fields are expected to be VARCHAR[] arrays
+            evidence_count_parts.append(f"ifnull(array_length({field}),0)")
     
     evidence_count_sum = "+".join(evidence_count_parts) if evidence_count_parts else "0"
     return f"{evidence_count_sum} as evidence_count,"
@@ -78,15 +85,19 @@ def node_joins(predicate):
     """
 
 
-def grouping_key(grouping_fields):
+def grouping_key(grouping_fields, edges_column_names: list = None):
     if not grouping_fields:
         return "null as grouping_key"
     fragments = []
     for field in grouping_fields:
-        if field == 'negated':
-            fragments.append(f"coalesce(cast({field} as varchar).replace('true','NOT'), '')")
-        else:
-            fragments.append(field)
+        # Only include fields that actually exist in the edges table
+        if not edges_column_names or field in edges_column_names:
+            if field == 'negated':
+                fragments.append(f"coalesce(cast({field} as varchar).replace('true','NOT'), '')")
+            else:
+                fragments.append(field)
+    if not fragments:
+        return "null as grouping_key"
     grouping_key_fragments = ", ".join(fragments)
     return f"concat_ws('|', {grouping_key_fragments}) as grouping_key"
 
@@ -275,6 +286,11 @@ def add_closure(closure_file: str,
     # Get edges table schema to determine which fields are VARCHAR[]
     edges_table_info = db.sql("DESCRIBE edges").fetchall()
     edges_table_types = {col[0]: col[1] for col in edges_table_info}
+    edges_column_names = [col[0] for col in edges_table_info]
+    
+    # Get nodes table schema to check for available columns
+    nodes_table_info = db.sql("DESCRIBE nodes").fetchall()
+    node_column_names = [col[0] for col in nodes_table_info]
     
     # Build edge joins with proper multivalued field handling
     edge_field_joins = []
@@ -290,10 +306,10 @@ def add_closure(closure_file: str,
     edges_query = f"""
     create or replace table denormalized_edges as
     select edges.*, 
-           {"".join([edge_columns(field) for field in edge_fields])}
-           {"".join([edge_columns(field, include_closure_fields=False) for field in edge_fields_to_label])} 
-           {evidence_sum(evidence_fields)}
-           {grouping_key(grouping_fields)}  
+           {"".join([edge_columns(field, node_column_names=node_column_names) for field in edge_fields])}
+           {"".join([edge_columns(field, include_closure_fields=False, node_column_names=node_column_names) for field in edge_fields_to_label])} 
+           {evidence_sum(evidence_fields, edges_column_names)}
+           {grouping_key(grouping_fields, edges_column_names)}  
     from edges
         {"".join(edge_field_joins)}
         {"".join(edge_field_to_label_joins)}
