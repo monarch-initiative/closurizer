@@ -257,6 +257,21 @@ def add_closure(closure_file: str,
         group by subject_id
         """)
 
+        db.sql("""
+        create or replace table descendants_id as 
+        select object_id as id, array_agg(subject_id) as descendants 
+        from closure 
+        group by object_id
+        """)
+
+        db.sql("""
+        create or replace table descendants_label as 
+        select object_id as id, array_agg(name) as descendants_label 
+        from closure 
+        join nodes on subject_id = nodes.id
+        group by object_id
+        """)
+
     # Get edges table schema to determine which fields are VARCHAR[]
     edges_table_info = db.sql("DESCRIBE edges").fetchall()
     edges_table_types = {col[0]: col[1] for col in edges_table_info}
@@ -309,10 +324,15 @@ def add_closure(closure_file: str,
     create or replace table denormalized_nodes as
     select {nodes_base_fields}, 
         {"".join([node_columns(node_field) for node_field in node_fields])}
+        descendants_id.descendants as descendants,
+        descendants_label.descendants_label as descendants_label,
+        coalesce(array_length(descendants_id.descendants), 0) as descendant_count
     from nodes
         {node_joins('has_phenotype')}
+        left outer join descendants_id on nodes.id = descendants_id.id
+        left outer join descendants_label on nodes.id = descendants_label.id
     {additional_node_constraints}
-    group by {", ".join([f"nodes.{field}" for field in nodes_table_column_names])}
+    group by {", ".join([f"nodes.{field}" for field in nodes_table_column_names])}, descendants_id.descendants, descendants_label.descendants_label
     """
     print(nodes_query)
 
@@ -374,6 +394,9 @@ def add_closure(closure_file: str,
                 for field in denorm_nodes_column_names 
                 if 'VARCHAR[]' in denorm_nodes_types[field].upper()
             ]
+            
+            # The descendants fields are already handled by the general VARCHAR[] logic above
+            # No need to add them separately
             
             if array_field_replacements:
                 nodes_replacements = "REPLACE (\n" + ",\n".join(array_field_replacements) + ")\n"
