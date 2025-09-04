@@ -340,15 +340,10 @@ def add_closure(closure_file: str,
     create or replace table denormalized_nodes as
     select {nodes_base_fields}, 
         {"".join([node_columns(node_field) for node_field in node_fields])}
-        descendants_id.descendants as descendants,
-        descendants_label.descendants_label as descendants_label,
-        coalesce(array_length(descendants_id.descendants), 0) as descendant_count
     from nodes
         {node_joins('has_phenotype')}
-        left outer join descendants_id on nodes.id = descendants_id.id
-        left outer join descendants_label on nodes.id = descendants_label.id
     {additional_node_constraints}
-    group by {", ".join([f"nodes.{field}" for field in nodes_table_column_names])}, descendants_id.descendants, descendants_label.descendants_label
+    group by {", ".join([f"nodes.{field}" for field in nodes_table_column_names])}
     """
     print(nodes_query)
 
@@ -396,6 +391,31 @@ def add_closure(closure_file: str,
             db.sql(edges_export_query)
 
         db.sql(nodes_query)
+        
+        # Add descendant columns separately to avoid memory issues with large GROUP BY
+        print("Adding descendant columns to denormalized_nodes...")
+        db.sql("alter table denormalized_nodes add column descendants VARCHAR[]")
+        db.sql("alter table denormalized_nodes add column descendants_label VARCHAR[]") 
+        db.sql("alter table denormalized_nodes add column descendant_count INTEGER")
+        
+        db.sql("""
+        update denormalized_nodes 
+        set descendants = descendants_id.descendants
+        from descendants_id 
+        where denormalized_nodes.id = descendants_id.id
+        """)
+        
+        db.sql("""
+        update denormalized_nodes 
+        set descendants_label = descendants_label.descendants_label
+        from descendants_label 
+        where denormalized_nodes.id = descendants_label.id
+        """)
+        
+        db.sql("""
+        update denormalized_nodes 
+        set descendant_count = coalesce(array_length(descendants), 0)
+        """)
         
         # Export nodes to TSV only if requested
         if export_nodes:
