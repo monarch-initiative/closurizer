@@ -208,7 +208,7 @@ def test_custom_database_path():
 
 
 def test_descendant_fields_in_nodes_output():
-    """Test that descendant fields (descendants, descendants_label, descendant_count) are properly added to nodes output"""
+    """Test that descendant fields (has_descendant, has_descendant_label, has_descendant_count) are properly added to nodes output"""
     
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
@@ -295,9 +295,9 @@ GRANDCHILD:1	rdfs:subClassOf	ROOT:1"""
         lines = nodes_content.strip().split('\n')
         header = lines[0].split('\t')
         
-        assert 'descendants' in header, f"Missing descendants column in header: {header}"
-        assert 'descendants_label' in header, f"Missing descendants_label column in header: {header}"
-        assert 'descendant_count' in header, f"Missing descendant_count column in header: {header}"
+        assert 'has_descendant' in header, f"Missing has_descendant column in header: {header}"
+        assert 'has_descendant_label' in header, f"Missing has_descendant_label column in header: {header}"
+        assert 'has_descendant_count' in header, f"Missing has_descendant_count column in header: {header}"
         
         # Check that ROOT:1 has descendants
         root_line = None
@@ -310,17 +310,17 @@ GRANDCHILD:1	rdfs:subClassOf	ROOT:1"""
         assert root_line is not None, "ROOT:1 not found in nodes output"
         
         # ROOT:1 should have CHILD:1, CHILD:2, and GRANDCHILD:1 as descendants
-        # Check that descendant_count > 0 for ROOT:1
-        descendant_count_idx = header.index('descendant_count')
+        # Check that has_descendant_count > 0 for ROOT:1
+        descendant_count_idx = header.index('has_descendant_count')
         root_fields = root_line.split('\t')
         descendant_count = int(root_fields[descendant_count_idx]) if len(root_fields) > descendant_count_idx and root_fields[descendant_count_idx].isdigit() else 0
         
         assert descendant_count > 0, f"ROOT:1 should have descendants, got count: {descendant_count}"
         
-        # Check that descendants field contains descendant IDs (pipe-delimited)
-        descendants_idx = header.index('descendants')
+        # Check that has_descendant field contains descendant IDs (pipe-delimited)
+        descendants_idx = header.index('has_descendant')
         if len(root_fields) > descendants_idx:
             descendants_field = root_fields[descendants_idx]
             # Should contain CHILD:1, CHILD:2, GRANDCHILD:1 in some form
             assert 'CHILD:1' in descendants_field or 'CHILD:2' in descendants_field or 'GRANDCHILD:1' in descendants_field, \
-                f"ROOT:1 descendants field should contain descendant IDs, got: {descendants_field}"
+                f"ROOT:1 has_descendant field should contain descendant IDs, got: {descendants_field}"

@@ -394,27 +394,27 @@ def add_closure(closure_file: str,
         
         # Add descendant columns separately to avoid memory issues with large GROUP BY
         print("Adding descendant columns to denormalized_nodes...")
-        db.sql("alter table denormalized_nodes add column descendants VARCHAR[]")
-        db.sql("alter table denormalized_nodes add column descendants_label VARCHAR[]") 
-        db.sql("alter table denormalized_nodes add column descendant_count INTEGER")
+        db.sql("alter table denormalized_nodes add column has_descendant VARCHAR[]")
+        db.sql("alter table denormalized_nodes add column has_descendant_label VARCHAR[]") 
+        db.sql("alter table denormalized_nodes add column has_descendant_count INTEGER")
         
         db.sql("""
         update denormalized_nodes 
-        set descendants = descendants_id.descendants
+        set has_descendant = descendants_id.descendants
         from descendants_id 
         where denormalized_nodes.id = descendants_id.id
         """)
         
         db.sql("""
         update denormalized_nodes 
-        set descendants_label = descendants_label.descendants_label
+        set has_descendant_label = descendants_label.descendants_label
         from descendants_label 
         where denormalized_nodes.id = descendants_label.id
         """)
         
         db.sql("""
         update denormalized_nodes 
-        set descendant_count = coalesce(array_length(descendants), 0)
+        set has_descendant_count = coalesce(array_length(has_descendant), 0)
         """)
         
         # Export nodes to TSV only if requested
