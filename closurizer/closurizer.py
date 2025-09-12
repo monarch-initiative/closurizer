@@ -106,8 +106,6 @@ def grouping_key(grouping_fields, edges_column_names: list = None):
 
 def load_from_archive(kg_archive: str, db, multivalued_fields: List[str]):
     """Load nodes and edges tables from tar.gz archive"""
-    import tarfile
-    import os
     
     tar = tarfile.open(f"{kg_archive}")
 
