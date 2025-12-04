@@ -300,14 +300,33 @@ def add_closure(closure_file: str,
     for field in edge_fields_to_label:
         is_multivalued = field in multivalued_fields and 'VARCHAR[]' in edges_table_types.get(field, '').upper()
         edge_field_to_label_joins.append(edge_joins(field, include_closure_joins=False, is_multivalued=is_multivalued))
-    
+
+    # Identify columns that will be created by edge_columns() to avoid conflicts
+    # These columns should be excluded from edges.* selection
+    columns_to_exclude = set()
+    for field in edge_fields + edge_fields_to_label:
+        columns_to_exclude.add(f"{field}_label")
+        columns_to_exclude.add(f"{field}_category")
+        columns_to_exclude.add(f"{field}_namespace")
+        columns_to_exclude.add(f"{field}_closure")
+        columns_to_exclude.add(f"{field}_closure_label")
+        columns_to_exclude.add(f"{field}_taxon")
+        columns_to_exclude.add(f"{field}_taxon_label")
+
+    # Build edges.* EXCLUDE clause to avoid column name conflicts
+    excluded_columns_list = [col for col in columns_to_exclude if col in edges_column_names]
+    if excluded_columns_list:
+        edges_select = f"edges.* EXCLUDE ({', '.join(excluded_columns_list)})"
+    else:
+        edges_select = "edges.*"
+
     edges_query = f"""
     create or replace table denormalized_edges as
-    select edges.*, 
+    select {edges_select},
            {"".join([edge_columns(field, node_column_names=node_column_names) for field in edge_fields])}
-           {"".join([edge_columns(field, include_closure_fields=False, node_column_names=node_column_names) for field in edge_fields_to_label])} 
+           {"".join([edge_columns(field, include_closure_fields=False, node_column_names=node_column_names) for field in edge_fields_to_label])}
            {evidence_sum(evidence_fields, edges_column_names)}
-           {grouping_key(grouping_fields, edges_column_names)}  
+           {grouping_key(grouping_fields, edges_column_names)}
     from edges
         {"".join(edge_field_joins)}
         {"".join(edge_field_to_label_joins)}
